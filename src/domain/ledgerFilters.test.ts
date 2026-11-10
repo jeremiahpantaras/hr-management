@@ -6,19 +6,19 @@ import type { LeaveTransaction } from '@/types/models';
 
 const { ledger } = juan2026();
 const withRemarks = ledger.map<LeaveTransaction>((entry, index) =>
-  index === 3 ? { ...entry, remarks: 'Family trip to Cebu' } : entry,
+  index === 1 ? { ...entry, remarks: 'Family trip to Cebu' } : entry,
 );
 
 describe('filterLoadedRows (TC-LU-17)', () => {
   it('returns everything when no filter is set', () => {
-    expect(filterLoadedRows(withRemarks, {})).toHaveLength(7);
+    expect(filterLoadedRows(withRemarks, {})).toHaveLength(5);
     expect(hasLoadedRowFilters({})).toBe(false);
     expect(hasLoadedRowFilters({ text: '  ' })).toBe(false);
   });
   it('searches remarks, employee name and Employee ID, ignoring case', () => {
     expect(filterLoadedRows(withRemarks, { text: 'cebu' })).toHaveLength(1);
-    expect(filterLoadedRows(withRemarks, { text: 'JUAN' })).toHaveLength(7);
-    expect(filterLoadedRows(withRemarks, { text: 'emp-0042' })).toHaveLength(7);
+    expect(filterLoadedRows(withRemarks, { text: 'JUAN' })).toHaveLength(5);
+    expect(filterLoadedRows(withRemarks, { text: 'emp-0042' })).toHaveLength(5);
     expect(filterLoadedRows(withRemarks, { text: 'nobody' })).toHaveLength(0);
     expect(hasLoadedRowFilters({ text: 'x' })).toBe(true);
   });

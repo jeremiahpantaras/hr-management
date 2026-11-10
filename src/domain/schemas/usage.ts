@@ -6,7 +6,6 @@ import { daysField, remarksField, yearField } from '@/domain/schemas/days';
 export const usageSchema = z
   .object({
     employeeId: z.string().min(1, 'Select an employee.'),
-    leaveTypeId: z.string().min(1, 'Select a leave type.'),
     year: yearField,
     dateFrom: z.string().min(1, 'Enter the start date.'),
     dateTo: z.string().min(1, 'Enter the end date.'),

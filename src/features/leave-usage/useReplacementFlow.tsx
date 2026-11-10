@@ -22,7 +22,6 @@ export function useReplacementFlow(year: number): {
     if (!thenReEnter || entry.transactionType !== 'USAGE') return;
     setPending({
       employeeId: entry.employeeId,
-      leaveTypeId: entry.leaveTypeId,
       year: entry.leaveYear,
       dateFrom: entry.dateFrom ?? undefined,
       dateTo: entry.dateTo ?? undefined,

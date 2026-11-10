@@ -8,9 +8,8 @@ export type AppErrorCode =
   | 'VALIDATION'
   | 'INSUFFICIENT_BALANCE'
   | 'EMPLOYEE_ARCHIVED'
-  | 'LEAVE_TYPE_INACTIVE'
   | 'DUPLICATE_EMPLOYEE_NUMBER'
-  | 'DUPLICATE_LEAVE_TYPE_NAME'
+  | 'EMPLOYEE_HAS_RECORDS'
   | 'ALREADY_REVERSED'
   | 'CANNOT_REVERSE'
   | 'NOT_FOUND'
@@ -53,9 +52,9 @@ const MESSAGES: Record<AppErrorCode, string> = {
   VALIDATION: 'Please check the highlighted fields and try again.',
   INSUFFICIENT_BALANCE: 'There are not enough leave credits for that.',
   EMPLOYEE_ARCHIVED: 'That employee is archived. Restore them to continue.',
-  LEAVE_TYPE_INACTIVE: "That leave type is inactive and can't be used for new entries.",
   DUPLICATE_EMPLOYEE_NUMBER: 'This employee ID is already in use.',
-  DUPLICATE_LEAVE_TYPE_NAME: 'A leave type with this name already exists.',
+  EMPLOYEE_HAS_RECORDS:
+    "This employee has leave records and can't be deleted. Archive them instead.",
   ALREADY_REVERSED: 'This entry has already been reversed.',
   CANNOT_REVERSE: "This entry can't be reversed.",
   NOT_FOUND: 'That record no longer exists. Refresh and try again.',

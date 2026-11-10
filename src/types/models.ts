@@ -51,30 +51,17 @@ export interface Employee {
 /** `YYYY-MM-DD` — leave dates are plain calendar dates, never timestamps (D-06). */
 export type IsoDate = string;
 
-/** A configurable leave type (DB design §3.4). */
-export interface LeaveType {
-  readonly id: string;
-  readonly name: string;
-  readonly description: string | null;
-  readonly isActive: boolean;
-  readonly createdAt: Date | null;
-  readonly createdBy: string;
-  readonly updatedAt: Date | null;
-  readonly updatedBy: string;
-}
-
 /** The two running totals of a balance; `available` is always derived from them. */
 export interface BalanceTotals {
   readonly totalCredits: number;
   readonly totalUsed: number;
 }
 
-/** A materialized balance for one employee × year × leave type (DB design §3.5). */
+/** The leave credits of one employee for one year (one pool; there are no leave types). */
 export interface LeaveBalance extends BalanceTotals {
-  /** `{employeeId}_{year}_{leaveTypeId}` */
+  /** `{employeeId}_{year}` */
   readonly id: string;
   readonly employeeId: string;
-  readonly leaveTypeId: string;
   readonly year: number;
   readonly availableCredits: number;
   readonly lastTransactionId: string;
@@ -90,8 +77,6 @@ export interface LeaveTransaction {
   readonly employeeNameSnapshot: string;
   readonly positionSnapshot: string;
   readonly departmentSnapshot: string | null;
-  readonly leaveTypeId: string;
-  readonly leaveTypeNameSnapshot: string;
   readonly leaveYear: number;
   readonly balanceId: string;
   readonly transactionType: TransactionType;

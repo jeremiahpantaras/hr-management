@@ -14,7 +14,6 @@ import { EMPTY_FILTERS, type LedgerFilterState } from '@/features/leave-history/
 import { LedgerFilters } from '@/features/leave-history/LedgerFilters';
 import { LedgerTable } from '@/features/leave-history/LedgerTable';
 import { ReverseDialog } from '@/features/leave-history/ReverseDialog';
-import { useLeaveTypes } from '@/features/leave-types/hooks/useLeaveTypes';
 import type { LeaveTransaction } from '@/types/models';
 
 interface LedgerListProps {
@@ -33,7 +32,7 @@ interface LedgerListProps {
 
 /**
  * Filters + table + cursor pagination + detail sheet + reverse dialog (UI spec §6.9, §6.11).
- * Employee, leave type and entry type filter on the server; text search and the leave-date range
+ * Employee and entry type filter on the server; text search and the leave-date range
  * apply to the rows loaded so far — the page says so and offers "Load all" (DB §8.5).
  */
 export function LedgerList({
@@ -48,7 +47,6 @@ export function LedgerList({
 }: LedgerListProps) {
   const [filters, setFilters] = useState<LedgerFilterState>(EMPTY_FILTERS);
   const employees = useEmployees();
-  const leaveTypes = useLeaveTypes();
 
   const serverType = fixedType ?? (filters.transactionType as TransactionType | '');
   const query = useLedgerList({
@@ -58,7 +56,6 @@ export function LedgerList({
       : filters.employeeId
         ? { employeeId: filters.employeeId }
         : {}),
-    ...(filters.leaveTypeId ? { leaveTypeId: filters.leaveTypeId } : {}),
     ...(serverType ? { transactionType: serverType } : {}),
   });
   const loaded = useMemo(() => flattenLedger(query.data), [query.data]);
@@ -105,7 +102,6 @@ export function LedgerList({
         onChange={setFilters}
         employees={employees.data ?? []}
         employeesLoading={employees.isPending}
-        leaveTypes={leaveTypes.data ?? []}
         showTypeFilter={variant === 'history'}
         hideEmployeeFilter={lockedEmployeeId !== undefined}
       />

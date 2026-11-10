@@ -7,14 +7,12 @@ import type { EnvResult } from '@/lib/env';
 import * as employeesService from '@/services/employees.service';
 import * as balancesService from '@/services/leaveBalances.service';
 import * as ledgerService from '@/services/leaveLedger.service';
-import * as typesService from '@/services/leaveTypes.service';
 
 vi.mock('@/services/auth.service');
 vi.mock('@/services/users.service');
 vi.mock('@/services/employees.service');
 vi.mock('@/services/leaveBalances.service');
 vi.mock('@/services/leaveLedger.service');
-vi.mock('@/services/leaveTypes.service');
 
 /** A signed-in admin, so the shell can render (the Firebase services are replaced by a fake). */
 function signInFakeAdmin(): void {
@@ -22,7 +20,6 @@ function signInFakeAdmin(): void {
   const backend = new FakeAuthBackend();
   backend.install();
   vi.mocked(employeesService.listEmployees).mockResolvedValue([]);
-  vi.mocked(typesService.listLeaveTypes).mockResolvedValue([]);
   vi.mocked(balancesService.getBalancesForEmployees).mockResolvedValue([]);
   vi.mocked(ledgerService.listLedgerPage).mockResolvedValue({
     items: [],

@@ -5,14 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { EMPTY_FILTERS, type LedgerFilterState } from '@/features/leave-history/ledgerFilterState';
-import type { Employee, LeaveType } from '@/types/models';
+import type { Employee } from '@/types/models';
 
 interface LedgerFiltersProps {
   readonly value: LedgerFilterState;
   readonly onChange: (next: LedgerFilterState) => void;
   readonly employees: readonly Employee[];
   readonly employeesLoading: boolean;
-  readonly leaveTypes: readonly LeaveType[];
   /** Show the Allocation / Usage / Reversal filter (Leave History only). */
   readonly showTypeFilter?: boolean;
   /** The list is already scoped to one employee (the employee page). */
@@ -31,7 +30,6 @@ export function LedgerFilters({
   onChange,
   employees,
   employeesLoading,
-  leaveTypes,
   showTypeFilter = false,
   hideEmployeeFilter = false,
 }: LedgerFiltersProps) {
@@ -57,15 +55,6 @@ export function LedgerFilters({
             />
           </div>
         )}
-        <FilterDropdown
-          label="Leave type"
-          allLabel="All leave types"
-          value={value.leaveTypeId}
-          options={leaveTypes.map((type) => ({ value: type.id, label: type.name }))}
-          onChange={(leaveTypeId) => {
-            set({ leaveTypeId });
-          }}
-        />
         {showTypeFilter ? (
           <FilterDropdown
             label="Type"

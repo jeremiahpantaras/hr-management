@@ -15,7 +15,12 @@ import { useAuth } from '@/features/auth/useAuth';
 import {
   archiveEmployee,
   createEmployee,
+  archiveEmployeesBulk,
   createEmployeesBulk,
+  deleteEmployeesBulk,
+  findEmployeesWithLeaveRecords,
+  restoreEmployeesBulk,
+  type BulkActionResult,
   type BulkCreateItem,
   type BulkCreateResult,
   getEmployee,
@@ -133,5 +138,40 @@ export function useImportEmployees(): UseMutationResult<
     mutationFn: ({ items, onProgress }) =>
       createEmployeesBulk(items, requireActor(uid), { onProgress }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: employeeKeys.all }),
+  });
+}
+
+export type BulkEmployeeAction = 'archive' | 'restore' | 'delete';
+
+/**
+ * Archive / restore / permanently delete several employees at once. The directory is refreshed once,
+ * whatever the outcome, so the table never shows stale rows.
+ */
+export function useBulkEmployeeAction(): UseMutationResult<
+  BulkActionResult[],
+  Error,
+  {
+    readonly action: BulkEmployeeAction;
+    readonly ids: readonly string[];
+    readonly onProgress?: (done: number, total: number) => void;
+  }
+> {
+  const queryClient = useQueryClient();
+  const uid = useActorUid();
+  return useMutation({
+    mutationFn: ({ action, ids, onProgress }) => {
+      const actor = requireActor(uid);
+      if (action === 'archive') return archiveEmployeesBulk(ids, actor, { onProgress });
+      if (action === 'restore') return restoreEmployeesBulk(ids, actor, { onProgress });
+      return deleteEmployeesBulk(ids, { onProgress });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: employeeKeys.all }),
+  });
+}
+
+/** Which of the given employees have leave records (and so cannot be deleted). */
+export function useCheckDeletable(): UseMutationResult<Set<string>, Error, readonly string[]> {
+  return useMutation({
+    mutationFn: (ids: readonly string[]) => findEmployeesWithLeaveRecords(ids),
   });
 }

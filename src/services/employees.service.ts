@@ -3,8 +3,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  query,
   runTransaction,
   serverTimestamp,
+  where,
   type DocumentReference,
 } from 'firebase/firestore';
 
@@ -242,4 +245,147 @@ export async function createEmployeesBulk(
 
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
   return results;
+}
+
+// ───────────────────────── bulk actions (select + archive / restore / delete) ─────────────────────────
+
+export interface BulkActionResult {
+  readonly employeeId: string;
+  readonly ok: boolean;
+  readonly code: AppError['code'] | null;
+}
+
+/** Runs `action` for every id a few at a time. One failure never stops the others. */
+async function runForEach(
+  ids: readonly string[],
+  action: (employeeId: string) => Promise<void>,
+  options: {
+    readonly concurrency?: number;
+    readonly onProgress?: (done: number, total: number) => void;
+  },
+): Promise<BulkActionResult[]> {
+  const results = new Array<BulkActionResult>(ids.length);
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? 4, 8));
+  let next = 0;
+  let done = 0;
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = next;
+      next += 1;
+      const employeeId = ids[index];
+      if (employeeId === undefined) return;
+      try {
+        await action(employeeId);
+        results[index] = { employeeId, ok: true, code: null };
+      } catch (error) {
+        results[index] = {
+          employeeId,
+          ok: false,
+          code: error instanceof AppError ? error.code : 'UNKNOWN',
+        };
+      }
+      done += 1;
+      options.onProgress?.(done, ids.length);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()));
+  return results;
+}
+
+interface BulkOptions {
+  readonly onProgress?: (done: number, total: number) => void;
+}
+
+export function archiveEmployeesBulk(
+  ids: readonly string[],
+  actorUid: string,
+  options: BulkOptions = {},
+): Promise<BulkActionResult[]> {
+  return runForEach(ids, (id) => archiveEmployee(id, actorUid), options);
+}
+
+export function restoreEmployeesBulk(
+  ids: readonly string[],
+  actorUid: string,
+  options: BulkOptions = {},
+): Promise<BulkActionResult[]> {
+  return runForEach(ids, (id) => restoreEmployee(id, actorUid), options);
+}
+
+/** True if the employee has any balance or ledger entry (in any year). */
+async function hasLeaveRecords(employeeId: string): Promise<boolean> {
+  const { db } = getFirebase();
+  const [balance, entry] = await Promise.all([
+    getDocs(
+      query(
+        collection(db, COLLECTIONS.leaveBalances),
+        where('employeeId', '==', employeeId),
+        limit(1),
+      ),
+    ),
+    getDocs(
+      query(
+        collection(db, COLLECTIONS.leaveTransactions),
+        where('employeeId', '==', employeeId),
+        limit(1),
+      ),
+    ),
+  ]);
+  return !balance.empty || !entry.empty;
+}
+
+/**
+ * Which of these employees have leave records and therefore cannot be deleted. Used to tell the user
+ * BEFORE they confirm; `deleteEmployee` checks again at deletion time.
+ */
+export async function findEmployeesWithLeaveRecords(
+  ids: readonly string[],
+  options: BulkOptions = {},
+): Promise<Set<string>> {
+  const blocked = new Set<string>();
+  try {
+    const results = await runForEach(
+      ids,
+      async (id) => {
+        if (await hasLeaveRecords(id)) blocked.add(id);
+      },
+      { concurrency: 6, onProgress: options.onProgress },
+    );
+    const failed = results.find((r) => !r.ok);
+    if (failed) throw new AppError(failed.code ?? 'UNKNOWN');
+    return blocked;
+  } catch (error) {
+    throw mapFirebaseError(error);
+  }
+}
+
+/**
+ * Permanently deletes an employee and frees their Employee ID (the reservation is deleted in the
+ * same commit; the Security Rules require that). The leave history is the audit trail, so an
+ * employee WITH any balance or ledger entry is refused — archive them instead. (The rules cannot
+ * query, so this guard lives here; a concurrent allocation between this check and the commit is
+ * the one gap, see DEV-043.) Deleting an employee that is already gone counts as done.
+ */
+export async function deleteEmployee(employeeId: string): Promise<void> {
+  const { db } = getFirebase();
+  try {
+    if (await hasLeaveRecords(employeeId)) throw new AppError('EMPLOYEE_HAS_RECORDS');
+    const employeeRef = doc(db, COLLECTIONS.employees, employeeId);
+    await runTransaction(db, async (transaction) => {
+      const current = await transaction.get(employeeRef);
+      if (!current.exists()) return;
+      const key: unknown = current.get('employeeNumberKey');
+      transaction.delete(employeeRef);
+      if (typeof key === 'string') transaction.delete(doc(db, COLLECTIONS.employeeNumbers, key));
+    });
+  } catch (error) {
+    throw mapFirebaseError(error);
+  }
+}
+
+export function deleteEmployeesBulk(
+  ids: readonly string[],
+  options: BulkOptions = {},
+): Promise<BulkActionResult[]> {
+  return runForEach(ids, deleteEmployee, options);
 }

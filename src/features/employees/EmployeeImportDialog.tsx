@@ -160,9 +160,8 @@ function ImportDialogContent({ onClose }: { readonly onClose: () => void }) {
           <>
             <div className="flex flex-col gap-3 rounded-control border border-dashed p-4">
               <p className="text-sm text-fg">
-                Columns: <strong>Employee ID, Complete Name, Position, Department</strong>{' '}
-                (optional) and <strong>Employment Status</strong>. Up to {MAX_IMPORT_ROWS} employees
-                per file.
+                Columns: <strong>Employee ID, Complete Name, Position, Location</strong> (optional)
+                and <strong>Employment Status</strong>. Up to {MAX_IMPORT_ROWS} employees per file.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <SegmentedControl<PaperSize>

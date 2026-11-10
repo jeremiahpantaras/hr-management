@@ -15,7 +15,6 @@ import type {
   BalanceTotals,
   Employee,
   LeaveTransaction,
-  LeaveType,
   NewLeaveTransaction,
 } from '@/types/models';
 
@@ -27,9 +26,9 @@ import type {
 
 const REVERSAL_PREFIX = 'rev_';
 
-/** `{employeeId}_{year}_{leaveTypeId}` — all three parts are underscore-free. */
-export function makeBalanceId(employeeId: string, year: number, leaveTypeId: string): string {
-  return `${employeeId}_${String(year)}_${leaveTypeId}`;
+/** `{employeeId}_{year}` — one credit pool per employee per year (both parts are underscore-free). */
+export function makeBalanceId(employeeId: string, year: number): string {
+  return `${employeeId}_${String(year)}`;
 }
 
 /** Deterministic reversal id (R-02): an entry can be reversed at most once. */
@@ -90,7 +89,6 @@ interface CommonContext {
     Employee,
     'id' | 'employeeNumber' | 'fullName' | 'position' | 'department' | 'isArchived'
   >;
-  readonly leaveType: Pick<LeaveType, 'id' | 'name' | 'isActive'>;
   /** The balance's current totals, or `null` when it does not exist yet. */
   readonly balance: BalanceTotals | null;
   readonly actor: Actor;
@@ -104,17 +102,15 @@ function baseEntry(
   effect: BalanceEffect,
   after: BalanceTotals,
 ): NewLeaveTransaction {
-  const { employee, leaveType, actor } = context;
+  const { employee, actor } = context;
   return {
     employeeId: employee.id,
     employeeNumberSnapshot: employee.employeeNumber,
     employeeNameSnapshot: employee.fullName,
     positionSnapshot: employee.position,
     departmentSnapshot: employee.department,
-    leaveTypeId: leaveType.id,
-    leaveTypeNameSnapshot: leaveType.name,
     leaveYear: year,
-    balanceId: makeBalanceId(employee.id, year, leaveType.id),
+    balanceId: makeBalanceId(employee.id, year),
     transactionType: type,
     days,
     creditsDelta: effect.creditsDelta,
@@ -134,7 +130,6 @@ function baseEntry(
 
 function assertUsable(context: CommonContext): void {
   if (context.employee.isArchived) throw new AppError('EMPLOYEE_ARCHIVED');
-  if (!context.leaveType.isActive) throw new AppError('LEAVE_TYPE_INACTIVE');
 }
 
 export interface AllocationParams extends CommonContext {
@@ -210,7 +205,7 @@ export interface BuiltReversal extends BuiltEntry {
 
 /**
  * BR-COR-*: a mirror of the original with opposite deltas, the same snapshots and dates, and a
- * mandatory reason. Archived employees and inactive leave types do NOT block it (R-03).
+ * mandatory reason. An archived employee does NOT block it (R-03).
  */
 export function buildReversalEntry(params: ReversalParams): BuiltReversal {
   const { original, actor } = params;
@@ -242,8 +237,6 @@ export function buildReversalEntry(params: ReversalParams): BuiltReversal {
     employeeNameSnapshot: original.employeeNameSnapshot,
     positionSnapshot: original.positionSnapshot,
     departmentSnapshot: original.departmentSnapshot,
-    leaveTypeId: original.leaveTypeId,
-    leaveTypeNameSnapshot: original.leaveTypeNameSnapshot,
     leaveYear: original.leaveYear,
     balanceId: original.balanceId,
     transactionType: 'REVERSAL',

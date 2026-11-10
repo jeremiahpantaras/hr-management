@@ -20,20 +20,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createRulesEnv, seedUserProfile } from '../setup/emulator';
 import {
   EMP_ID,
-  TYPE_SICK,
-  TYPE_VAC,
   addPair,
   allocationPair,
   archivedEmployee,
   commitPair,
   employee,
-  oldType,
   reversalPair,
   seedMasterData,
-  sick,
   txnId,
   usagePair,
-  vacation,
   type Pair,
 } from '../setup/ledgerFixtures';
 
@@ -76,7 +71,7 @@ function tamper(
   return { ...pair, ledger: apply(pair.ledger, ledger), balance: apply(pair.balance, balance) };
 }
 
-/** Allocates 10 Vacation credits for 2026 through the real rules. Returns the pair. */
+/** Allocates 10 credits for 2026 through the real rules. Returns the pair. */
 async function allocate10(id = T(1)): Promise<Pair> {
   const pair = allocationPair({ id, days: 10 });
   await commitPair(hr(), pair);
@@ -108,7 +103,7 @@ describe('access control (TC-RULES-USR-01/02 for the ledger)', () => {
       const db = context.firestore();
       await assertFails(getDoc(doc(db, 'leaveTransactions', T(1))));
       await assertFails(getDocs(collection(db, 'leaveTransactions')));
-      await assertFails(getDoc(doc(db, 'leaveBalances', `${EMP_ID}_2026_${TYPE_VAC}`)));
+      await assertFails(getDoc(doc(db, 'leaveBalances', `${EMP_ID}_2026`)));
       await assertFails(getDocs(collection(db, 'leaveBalances')));
     }
   });
@@ -152,7 +147,7 @@ describe('valid commits (TC-RULES-LED-01/02/03, V-4, V-5, V-8)', () => {
         allocationPair({ id: T(2), days: 2, balance: { totalCredits: 10, totalUsed: 0 } }),
       ),
     );
-    const stored = await getDoc(doc(hr(), 'leaveBalances', `${EMP_ID}_2026_${TYPE_VAC}`));
+    const stored = await getDoc(doc(hr(), 'leaveBalances', `${EMP_ID}_2026`));
     expect(stored.data()).toMatchObject({
       totalCredits: 12,
       availableCredits: 12,
@@ -160,9 +155,8 @@ describe('valid commits (TC-RULES-LED-01/02/03, V-4, V-5, V-8)', () => {
     });
   });
 
-  it('allocates for a different type and a different year independently', async () => {
+  it('allocates for a different year independently', async () => {
     await allocate10();
-    await assertSucceeds(commitPair(hr(), allocationPair({ id: T(2), days: 5, type: sick })));
     await assertSucceeds(commitPair(hr(), allocationPair({ id: T(3), days: 3, year: 2027 })));
   });
 
@@ -192,7 +186,7 @@ describe('valid commits (TC-RULES-LED-01/02/03, V-4, V-5, V-8)', () => {
         }),
       ),
     );
-    const stored = await getDoc(doc(hr(), 'leaveBalances', `${EMP_ID}_2026_${TYPE_VAC}`));
+    const stored = await getDoc(doc(hr(), 'leaveBalances', `${EMP_ID}_2026`));
     expect(stored.data()).toMatchObject({ totalUsed: 10, availableCredits: 0 });
   });
 
@@ -420,7 +414,6 @@ describe('arithmetic is bound to the stored balance (LED-07/08/09)', () => {
     const orphan = usagePair({
       id: T(1),
       days: 2,
-      type: sick,
       dateFrom: '2026-02-10',
       dateTo: '2026-02-11',
       balance: { totalCredits: 10, totalUsed: 0 },
@@ -431,7 +424,6 @@ describe('arithmetic is bound to the stored balance (LED-07/08/09)', () => {
       balance: {
         ...orphan.balance,
         employeeId: EMP_ID,
-        leaveTypeId: TYPE_SICK,
         year: 2026,
         createdAt: serverTimestamp(),
       },
@@ -572,9 +564,8 @@ describe('reversal integrity (LED-12/13/14/15)', () => {
     ['dateTo', { dateTo: '2026-04-21' }],
     ['employeeNameSnapshot', { employeeNameSnapshot: 'Someone Else' }],
     ['positionSnapshot', { positionSnapshot: 'CEO' }],
-    ['leaveTypeNameSnapshot', { leaveTypeNameSnapshot: 'Other' }],
     ['reversesType', { reversesType: 'ALLOCATION' }],
-    ['leaveTypeId', { leaveTypeId: TYPE_SICK }],
+    ['employeeId', { employeeId: 'other' }],
     ['a reason that is too short', { remarks: 'ab' }],
     ['a missing reason', { remarks: null }],
   ])('LED-15: a reversal with altered %s is denied', async (_name, change) => {
@@ -612,10 +603,6 @@ describe('master data and reversibility (LED-16)', () => {
     const asActive = { ...archivedEmployee, isArchived: false }; // fools the client builder only
     await assertFails(commitPair(hr(), allocationPair({ id: T(1), days: 10, emp: asActive })));
   });
-  it('denies an allocation for an inactive leave type', async () => {
-    const asActive = { ...oldType, isActive: true };
-    await assertFails(commitPair(hr(), allocationPair({ id: T(1), days: 10, type: asActive })));
-  });
   it('denies a usage once the employee has been archived, but ALLOWS reversing earlier entries (R-03)', async () => {
     await allocate10();
     const usage = await use(T(2), 1, '2026-04-20', '2026-04-20', {
@@ -644,38 +631,16 @@ describe('master data and reversibility (LED-16)', () => {
       ),
     );
   });
-  it('allows reversing an entry whose leave type has since been deactivated', async () => {
-    const alloc = await allocate10();
-    await env.withSecurityRulesDisabled(async (context) => {
-      await updateDoc(doc(context.firestore(), 'leaveTypes', TYPE_VAC), { isActive: false });
-    });
-    await assertFails(
-      commitPair(
-        hr(),
-        allocationPair({ id: T(2), days: 1, balance: { totalCredits: 10, totalUsed: 0 } }),
-      ),
-    );
-    await assertSucceeds(
-      commitPair(
-        hr(),
-        reversalPair({ original: alloc.domain, balance: { totalCredits: 10, totalUsed: 0 } }),
-      ),
-    );
-  });
   it('denies a snapshot that does not match the current master data (LED-23-adjacent)', async () => {
     const pair = allocationPair({ id: T(1), days: 10 });
     await assertFails(commitPair(hr(), tamper(pair, { employeeNameSnapshot: 'Forged Name' })));
-    await assertFails(commitPair(hr(), tamper(pair, { leaveTypeNameSnapshot: 'Forged Type' })));
     await assertFails(commitPair(hr(), tamper(pair, { positionSnapshot: 'Forged Position' })));
     await assertFails(commitPair(hr(), tamper(pair, { employeeNumberSnapshot: 'EMP-9999' })));
     await assertFails(commitPair(hr(), tamper(pair, { departmentSnapshot: null })));
   });
-  it('denies an unknown employee or leave type', async () => {
+  it('denies an unknown employee', async () => {
     await assertFails(
       commitPair(hr(), allocationPair({ id: T(1), days: 1, emp: { ...employee, id: 'ghost' } })),
-    );
-    await assertFails(
-      commitPair(hr(), allocationPair({ id: T(2), days: 1, type: { ...vacation, id: 'ghost' } })),
     );
   });
 });
@@ -844,11 +809,11 @@ describe('stamping and shape (LED-20/22/23)', () => {
       commitPair(hr(), tamper(pair, {}, { createdAt: Timestamp.fromDate(new Date('2020-01-01')) })),
     );
   });
-  it('LED-22: a balance document id that does not match employee/year/type is denied', async () => {
+  it('LED-22: a balance document id that does not match employee/year is denied', async () => {
     const pair = allocationPair({ id: T(1), days: 10 });
-    await assertFails(commitPair(hr(), { ...pair, balanceId: `${EMP_ID}_2026_${TYPE_SICK}` }));
-    await assertFails(commitPair(hr(), { ...pair, balanceId: `other_2026_${TYPE_VAC}` }));
-    await assertFails(commitPair(hr(), tamper(pair, { balanceId: `${EMP_ID}_2025_${TYPE_VAC}` })));
+    await assertFails(commitPair(hr(), { ...pair, balanceId: `${EMP_ID}_2026_extra` }));
+    await assertFails(commitPair(hr(), { ...pair, balanceId: 'other_2026' }));
+    await assertFails(commitPair(hr(), tamper(pair, { balanceId: `${EMP_ID}_2025` })));
   });
   it('LED-22: a fractional year is denied', async () => {
     const pair = allocationPair({ id: T(1), days: 10 });

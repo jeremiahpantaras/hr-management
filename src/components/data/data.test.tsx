@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { DataTable, type DataTableColumn } from '@/components/data/DataTable';
 import { EmployeeCombobox } from '@/components/data/EmployeeCombobox';
-import { LeaveBreakdownTable } from '@/components/data/LeaveBreakdownTable';
 import { Pagination } from '@/components/data/Pagination';
 import { ProgressBar } from '@/components/data/ProgressBar';
 import { SearchInput } from '@/components/data/SearchInput';
@@ -207,48 +206,6 @@ describe('Pagination', () => {
     rerender(<Pagination mode="cursor" loadedCount={1} hasMore={false} onLoadMore={onLoadMore} />);
     expect(screen.getByText('Loaded 1 row')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
-  });
-});
-
-describe('LeaveBreakdownTable', () => {
-  it('shows halves with one decimal, the supplied totals row, and muted unassigned rows', () => {
-    render(
-      <LeaveBreakdownTable
-        caption="Breakdown"
-        rows={[
-          {
-            id: 'v',
-            leaveTypeName: 'Vacation Leave',
-            total: 10,
-            used: 2.5,
-            unused: 7.5,
-            hasBalance: true,
-          },
-          {
-            id: 'o',
-            leaveTypeName: 'Old Leave',
-            total: 0,
-            used: 0,
-            unused: 0,
-            hasBalance: false,
-            inactive: true,
-          },
-        ]}
-        totals={{ total: 10, used: 2.5, unused: 7.5 }}
-      />,
-    );
-    const vacation = screen.getByRole('row', { name: /Vacation Leave/ });
-    expect(
-      within(vacation)
-        .getAllByRole('cell')
-        .map((c) => c.textContent),
-    ).toEqual(expect.arrayContaining(['10', '2.5', '7.5']));
-    const old = screen.getByRole('row', { name: /Old Leave/ });
-    expect(within(old).getByText('No credits assigned')).toBeInTheDocument();
-    expect(within(old).getByText('Inactive')).toBeInTheDocument();
-    expect(
-      within(screen.getByRole('row', { name: /^Total/ })).getAllByRole('cell')[3],
-    ).toHaveTextContent('7.5');
   });
 });
 

@@ -25,12 +25,7 @@ import {
   type BuiltEntry,
 } from '@/domain/ledger';
 import { getFirebase } from '@/lib/firebase';
-import {
-  toEmployee,
-  toLeaveBalance,
-  toLeaveTransaction,
-  toLeaveType,
-} from '@/services/firestore/converters';
+import { toEmployee, toLeaveBalance, toLeaveTransaction } from '@/services/firestore/converters';
 import { mapFirebaseError } from '@/services/firestore/errors';
 import { COLLECTIONS } from '@/services/firestore/paths';
 import type { Actor, BalanceTotals, LeaveTransaction } from '@/types/models';
@@ -89,7 +84,6 @@ export interface AllocationRequest {
   /** Client-generated Firestore auto-id: the idempotency key. */
   readonly transactionId: string;
   readonly employeeId: string;
-  readonly leaveTypeId: string;
   readonly year: number;
   readonly days: number;
   readonly remarks: string | null;
@@ -146,25 +140,18 @@ function duplicateResult(transactionId: string, data: DocumentData): LedgerResul
 /** Reads everything an allocation / usage needs, inside the transaction. */
 async function readContext(transaction: Transaction, request: AllocationRequest) {
   const { db } = getFirebase();
-  const [employeeSnap, typeSnap, balanceSnap] = [
+  const [employeeSnap, balanceSnap] = [
     await transaction.get(doc(db, COLLECTIONS.employees, request.employeeId)),
-    await transaction.get(doc(db, COLLECTIONS.leaveTypes, request.leaveTypeId)),
     await transaction.get(
-      doc(
-        db,
-        COLLECTIONS.leaveBalances,
-        makeBalanceId(request.employeeId, request.year, request.leaveTypeId),
-      ),
+      doc(db, COLLECTIONS.leaveBalances, makeBalanceId(request.employeeId, request.year)),
     ),
   ];
   const employee = employeeSnap.exists() ? toEmployee(employeeSnap.id, employeeSnap.data()) : null;
-  const leaveType = typeSnap.exists() ? toLeaveType(typeSnap.id, typeSnap.data()) : null;
-  if (employee === null || leaveType === null) throw new AppError('NOT_FOUND');
+  if (employee === null) throw new AppError('NOT_FOUND');
   const stored = balanceSnap.exists() ? toLeaveBalance(balanceSnap.id, balanceSnap.data()) : null;
   if (balanceSnap.exists() && stored === null) throw new AppError('UNKNOWN');
   return {
     employee,
-    leaveType,
     balanceExists: balanceSnap.exists(),
     balance: stored ? { totalCredits: stored.totalCredits, totalUsed: stored.totalUsed } : null,
   };
@@ -187,7 +174,6 @@ function writeEntryAndBalance(
   } else {
     transaction.set(balanceRef, {
       employeeId: built.entry.employeeId,
-      leaveTypeId: built.entry.leaveTypeId,
       year: built.entry.leaveYear,
       ...balanceChange(built, transactionId),
       createdAt: serverTimestamp(),
@@ -209,7 +195,6 @@ export async function recordAllocation(request: AllocationRequest): Promise<Ledg
             const context = await readContext(transaction, request);
             const built = buildAllocationEntry({
               employee: context.employee,
-              leaveType: context.leaveType,
               year: request.year,
               days: request.days,
               remarks: request.remarks,
@@ -246,7 +231,6 @@ export async function recordUsage(request: UsageRequest): Promise<LedgerResult> 
             const context = await readContext(transaction, request);
             const built = buildUsageEntry({
               employee: context.employee,
-              leaveType: context.leaveType,
               year: request.year,
               days: request.days,
               dateFrom: request.dateFrom,
@@ -333,7 +317,6 @@ export type LedgerCursor = QueryDocumentSnapshot<DocumentData>;
 export interface LedgerQuery {
   readonly year: number;
   readonly employeeId?: string;
-  readonly leaveTypeId?: string;
   readonly transactionType?: TransactionType;
   readonly pageSize?: number;
   readonly cursor?: LedgerCursor | null;
@@ -352,13 +335,12 @@ function toTransactions(docs: readonly QueryDocumentSnapshot<DocumentData>[]): L
   });
 }
 
-/** One page of the year's ledger, newest first, filtered on the server (DB §8.5; indexes 1–8). */
+/** One page of the year's ledger, newest first, filtered on the server (DB §8.5). */
 export async function listLedgerPage(params: LedgerQuery): Promise<LedgerPage> {
   const pageSize = params.pageSize ?? LEDGER_PAGE_SIZE;
   try {
     const constraints: QueryConstraint[] = [where('leaveYear', '==', params.year)];
     if (params.employeeId) constraints.push(where('employeeId', '==', params.employeeId));
-    if (params.leaveTypeId) constraints.push(where('leaveTypeId', '==', params.leaveTypeId));
     if (params.transactionType) {
       constraints.push(where('transactionType', '==', params.transactionType));
     }

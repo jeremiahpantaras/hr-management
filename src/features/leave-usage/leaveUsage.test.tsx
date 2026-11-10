@@ -13,13 +13,11 @@ import { LeaveUsagePage } from '@/features/leave-usage/LeaveUsagePage';
 import * as employeesService from '@/services/employees.service';
 import * as balancesService from '@/services/leaveBalances.service';
 import * as ledgerService from '@/services/leaveLedger.service';
-import * as typesService from '@/services/leaveTypes.service';
-import type { Employee, LeaveBalance, LeaveTransaction, LeaveType } from '@/types/models';
+import type { Employee, LeaveBalance, LeaveTransaction } from '@/types/models';
 
 vi.mock('@/services/employees.service');
 vi.mock('@/services/leaveBalances.service');
 vi.mock('@/services/leaveLedger.service');
-vi.mock('@/services/leaveTypes.service');
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const YEAR = new Date().getFullYear();
@@ -42,23 +40,10 @@ const juan: Employee = {
   updatedAt: NOW,
   updatedBy: 'hr1',
 };
-const vac: LeaveType = {
-  id: 'vac',
-  name: 'Vacation Leave',
-  description: null,
-  isActive: true,
-  createdAt: null,
-  createdBy: 'hr1',
-  updatedAt: null,
-  updatedBy: 'hr1',
-};
-const sick: LeaveType = { ...vac, id: 'sick', name: 'Sick Leave' };
-
 function balance(credits: number, used: number): LeaveBalance {
   return {
-    id: `juan_${String(YEAR)}_vac`,
+    id: `juan_${String(YEAR)}`,
     employeeId: 'juan',
-    leaveTypeId: 'vac',
     year: YEAR,
     totalCredits: credits,
     totalUsed: used,
@@ -82,10 +67,8 @@ function usage(
     employeeNameSnapshot: 'Juan Dela Cruz',
     positionSnapshot: 'Staff',
     departmentSnapshot: null,
-    leaveTypeId: 'vac',
-    leaveTypeNameSnapshot: 'Vacation Leave',
     leaveYear: YEAR,
-    balanceId: `juan_${String(YEAR)}_vac`,
+    balanceId: `juan_${String(YEAR)}`,
     transactionType: 'USAGE',
     days,
     creditsDelta: 0,
@@ -129,7 +112,6 @@ beforeEach(() => {
   vi.resetAllMocks();
   idCounter = 0;
   vi.mocked(employeesService.listEmployees).mockResolvedValue([juan]);
-  vi.mocked(typesService.listLeaveTypes).mockResolvedValue([sick, vac]);
   vi.mocked(balancesService.getBalance).mockResolvedValue(balance(10, 3));
   vi.mocked(ledgerService.newTransactionId).mockImplementation(
     () => `Tx${String((idCounter += 1)).padStart(18, '0')}`,
@@ -163,7 +145,6 @@ async function pick(dialog: HTMLElement, label: RegExp, option: string | RegExp)
 }
 async function fillValid(dialog: HTMLElement, days = '2') {
   await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-  await pick(dialog, /Leave type/, 'Vacation Leave');
   fireEvent.change(within(dialog).getByLabelText(/^Date from/), {
     target: { value: d('02', '10') },
   });
@@ -178,7 +159,6 @@ describe('Record usage form (UI §6.10)', () => {
     const dialog = await openRecord();
     await userEvent.click(submitButton(dialog));
     expect(await within(dialog).findByText('Select an employee.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Select a leave type.')).toBeInTheDocument();
     expect(within(dialog).getByText('Enter the start date.')).toBeInTheDocument();
     expect(within(dialog).getByText('Enter the end date.')).toBeInTheDocument();
     expect(within(dialog).getByText('Enter the number of days.')).toBeInTheDocument();
@@ -233,7 +213,6 @@ describe('Record usage form (UI §6.10)', () => {
     const dialog = await openRecord();
     await fillValid(dialog, '2');
     const strip = await within(dialog).findByText(/Available/);
-    expect(strip).toHaveTextContent('Vacation Leave');
     expect(strip).toHaveTextContent('Available 7 days. After this entry: 5.');
     expect(submitButton(dialog)).toBeEnabled();
 
@@ -253,9 +232,7 @@ describe('Record usage form (UI §6.10)', () => {
     const dialog = await openRecord();
     await fillValid(dialog, '1');
     expect(
-      await within(dialog).findByText(
-        /No Vacation Leave credits have been allocated to this employee for/,
-      ),
+      await within(dialog).findByText(/No credits have been allocated to this employee for/),
     ).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Allocate credits' })).toHaveAttribute(
       'href',
@@ -273,7 +250,6 @@ describe('Record usage form (UI §6.10)', () => {
       expect(ledgerService.recordUsage).toHaveBeenCalledWith({
         transactionId: expect.stringMatching(/^Tx\d{18}$/) as string,
         employeeId: 'juan',
-        leaveTypeId: 'vac',
         year: YEAR,
         days: 2,
         dateFrom: d('02', '10'),
@@ -283,7 +259,7 @@ describe('Record usage form (UI §6.10)', () => {
       });
     });
     expect(toast.success).toHaveBeenCalledWith(
-      'Recorded 2 days of Vacation Leave for Juan Dela Cruz. Remaining: 5.',
+      'Recorded 2 days of leave for Juan Dela Cruz. Remaining: 5.',
     );
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Record leave usage' })).not.toBeInTheDocument();
@@ -608,11 +584,11 @@ describe('Leave History (UI §6.11)', () => {
     const row = (await within(table).findByText(/Reversal of …VVVVVV/)).closest('tr')!;
     await userEvent.click(row);
     const sheet = await screen.findByRole('dialog');
-    expect(within(sheet).getByText('Reversal · Vacation Leave')).toBeInTheDocument();
+    expect(within(sheet).getByRole('heading', { name: 'Reversal' })).toBeInTheDocument();
     expect(within(sheet).getByText(/EMP-0042/)).toBeInTheDocument();
     expect(within(sheet).getByText('Balance after')).toBeInTheDocument();
     await userEvent.click(within(sheet).getByRole('button', { name: 'View the original entry' }));
-    expect(await within(sheet).findByText('Usage · Vacation Leave')).toBeInTheDocument();
+    expect(await within(sheet).findByRole('heading', { name: 'Usage' })).toBeInTheDocument();
     expect(within(sheet).getByRole('button', { name: 'View the reversal' })).toBeInTheDocument();
   });
 });

@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import type * as ErrorsModule from '@/domain/errors';
 import { reconcile } from '@/domain/reconcile';
-import { sumTotals, summarizeBalances } from '@/domain/summary';
+import { sumTotals } from '@/domain/summary';
 import type * as FirebaseLibModule from '@/lib/firebase';
 import type * as AuthServiceModule from '@/services/auth.service';
 import { toLeaveBalance, toLeaveTransaction } from '@/services/firestore/converters';
@@ -20,7 +20,6 @@ import { mapFirebaseError } from '@/services/firestore/errors';
 import type * as EmployeesServiceModule from '@/services/employees.service';
 import type * as BalancesServiceModule from '@/services/leaveBalances.service';
 import type * as LedgerServiceModule from '@/services/leaveLedger.service';
-import type * as LeaveTypesServiceModule from '@/services/leaveTypes.service';
 import type { Actor, LeaveBalance, LeaveTransaction } from '@/types/models';
 
 import {
@@ -44,15 +43,12 @@ let rulesEnv: RulesTestEnvironment;
 let ledger: typeof LedgerServiceModule;
 let balances: typeof BalancesServiceModule;
 let employees: typeof EmployeesServiceModule;
-let leaveTypes: typeof LeaveTypesServiceModule;
 let auth: typeof AuthServiceModule;
 let firebase: typeof FirebaseLibModule;
 let errors: typeof ErrorsModule;
 let actor: Actor;
 let juanId: string;
 let anaId: string;
-let vacId: string;
-let sickId: string;
 
 beforeAll(async () => {
   requireAuthEmulator();
@@ -63,11 +59,10 @@ beforeAll(async () => {
   vi.stubEnv('VITE_FIREBASE_APP_ID', '1:000000000000:web:demo');
   vi.stubEnv('VITE_USE_FIREBASE_EMULATORS', 'true');
   vi.resetModules();
-  [ledger, balances, employees, leaveTypes, auth, firebase, errors] = await Promise.all([
+  [ledger, balances, employees, auth, firebase, errors] = await Promise.all([
     import('@/services/leaveLedger.service'),
     import('@/services/leaveBalances.service'),
     import('@/services/employees.service'),
-    import('@/services/leaveTypes.service'),
     import('@/services/auth.service'),
     import('@/lib/firebase'),
     import('@/domain/errors'),
@@ -108,8 +103,6 @@ beforeEach(async () => {
     },
     uid,
   );
-  vacId = await leaveTypes.createLeaveType({ name: 'Vacation Leave', description: null }, uid);
-  sickId = await leaveTypes.createLeaveType({ name: 'Sick Leave', description: null }, uid);
 });
 
 afterEach(async () => {
@@ -167,7 +160,6 @@ const alloc = (days: number, over: Partial<LedgerServiceModule.AllocationRequest
   ledger.recordAllocation({
     transactionId: ledger.newTransactionId(),
     employeeId: juanId,
-    leaveTypeId: vacId,
     year: 2026,
     days,
     remarks: null,
@@ -183,7 +175,6 @@ const spend = (
   ledger.recordUsage({
     transactionId: ledger.newTransactionId(),
     employeeId: juanId,
-    leaveTypeId: vacId,
     year: 2026,
     days,
     dateFrom: from,
@@ -192,8 +183,7 @@ const spend = (
     actor,
     ...over,
   });
-const balanceId = (employee = juanId, year = 2026, type = vacId) =>
-  `${employee}_${String(year)}_${type}`;
+const balanceId = (employee = juanId, year = 2026) => `${employee}_${String(year)}`;
 
 describe('TC-CR: allocation', () => {
   it('TC-CR-01: creates the ledger entry and a new balance atomically', async () => {
@@ -217,7 +207,6 @@ describe('TC-CR: allocation', () => {
       employeeNameSnapshot: 'Juan Dela Cruz',
       positionSnapshot: 'Accounting Staff',
       departmentSnapshot: 'Finance',
-      leaveTypeNameSnapshot: 'Vacation Leave',
       resultingTotalCredits: 10,
       resultingTotalUsed: 0,
       reversedByTransactionId: null,
@@ -247,21 +236,16 @@ describe('TC-CR: allocation', () => {
     expect(all.ledger).toHaveLength(2);
   });
 
-  it('TC-CR-03 / TC-CR-14: another type or year is a separate balance and changes nothing else', async () => {
+  it('TC-CR-03 / TC-CR-14: another year or employee is a separate balance and changes nothing else', async () => {
     await alloc(10);
-    const sickBefore = await raw('leaveBalances', balanceId(juanId, 2026, sickId));
-    expect(sickBefore).toBeNull();
-    await alloc(5, { leaveTypeId: sickId });
+    expect(await raw('leaveBalances', balanceId(juanId, 2027))).toBeNull();
     await alloc(3, { year: 2027 });
     await alloc(7, { employeeId: anaId });
     expect(await raw('leaveBalances', balanceId())).toMatchObject({ totalCredits: 10 });
-    expect(await raw('leaveBalances', balanceId(juanId, 2026, sickId))).toMatchObject({
-      totalCredits: 5,
-    });
-    expect(await raw('leaveBalances', balanceId(juanId, 2027, vacId))).toMatchObject({
+    expect(await raw('leaveBalances', balanceId(juanId, 2027))).toMatchObject({
       totalCredits: 3,
     });
-    expect(await raw('leaveBalances', balanceId(anaId, 2026, vacId))).toMatchObject({
+    expect(await raw('leaveBalances', balanceId(anaId, 2026))).toMatchObject({
       totalCredits: 7,
     });
   });
@@ -272,18 +256,12 @@ describe('TC-CR: allocation', () => {
     expect((await readEverything()).ledger).toHaveLength(0);
   });
 
-  it('TC-CR-07: an inactive leave type cannot be allocated', async () => {
-    await leaveTypes.setLeaveTypeActive(vacId, false, actor.uid);
-    expect(await errorCodeOf(alloc(5))).toBe('LEAVE_TYPE_INACTIVE');
-  });
-
   it('TC-CR-08: a future year is allowed (EC)', async () => {
     expect((await alloc(4, { year: 2027 })).balance.totalCredits).toBe(4);
   });
 
-  it('rejects an unknown employee or leave type', async () => {
+  it('rejects an unknown employee', async () => {
     expect(await errorCodeOf(alloc(1, { employeeId: 'ghost' }))).toBe('NOT_FOUND');
-    expect(await errorCodeOf(alloc(1, { leaveTypeId: 'ghost' }))).toBe('NOT_FOUND');
   });
 
   it('TC-CR-12: remarks of 501 characters are rejected; 500 are accepted', async () => {
@@ -358,19 +336,13 @@ describe('TC-LU: usage', () => {
   });
 
   it('TC-LU-04: with no balance it is INSUFFICIENT_BALANCE and no balance is created', async () => {
-    expect(await errorCodeOf(spend(1, '2026-02-10', '2026-02-10', { leaveTypeId: sickId }))).toBe(
-      'INSUFFICIENT_BALANCE',
-    );
-    expect(await raw('leaveBalances', balanceId(juanId, 2026, sickId))).toBeNull();
     expect(await errorCodeOf(spend(1, '2026-02-10', '2026-02-10', { employeeId: anaId }))).toBe(
       'INSUFFICIENT_BALANCE',
     );
+    expect(await raw('leaveBalances', balanceId(anaId))).toBeNull();
   });
 
-  it('TC-LU-11: an archived employee or an inactive type is rejected', async () => {
-    await leaveTypes.setLeaveTypeActive(vacId, false, actor.uid);
-    expect(await errorCodeOf(spend(1, '2026-02-10', '2026-02-10'))).toBe('LEAVE_TYPE_INACTIVE');
-    await leaveTypes.setLeaveTypeActive(vacId, true, actor.uid);
+  it('TC-LU-11: an archived employee is rejected', async () => {
     await employees.archiveEmployee(juanId, actor.uid);
     expect(await errorCodeOf(spend(1, '2026-02-10', '2026-02-10'))).toBe('EMPLOYEE_ARCHIVED');
   });
@@ -572,11 +544,10 @@ describe('TC-REV: reversal', () => {
     }
   });
 
-  it('TC-REV-06 / TC-LT-08 / EC-09: allowed for an archived employee and an inactive type', async () => {
+  it('TC-REV-06 / EC-09: allowed for an archived employee', async () => {
     await alloc(10);
     const usage = await spend(2, '2026-02-10', '2026-02-11');
     await employees.archiveEmployee(juanId, actor.uid);
-    await leaveTypes.setLeaveTypeActive(vacId, false, actor.uid);
     const result = await ledger.reverseEntry({
       originalTransactionId: usage.transactionId,
       reason: 'Archived fix',
@@ -726,8 +697,6 @@ describe('TC-CONC: concurrency and atomicity', () => {
           employeeNameSnapshot: 'Juan Dela Cruz',
           positionSnapshot: 'Accounting Staff',
           departmentSnapshot: 'Finance',
-          leaveTypeId: vacId,
-          leaveTypeNameSnapshot: 'Vacation Leave',
           leaveYear: 2026,
           balanceId: balanceId(),
           transactionType: 'ALLOCATION',
@@ -767,33 +736,19 @@ describe('TC-CONC: concurrency and atomicity', () => {
 describe('queries and aggregates', () => {
   async function juan2026() {
     await alloc(10);
-    await alloc(5, { leaveTypeId: sickId });
-    await alloc(3, {
-      leaveTypeId: await leaveTypes.createLeaveType(
-        { name: 'Emergency Leave', description: null },
-        actor.uid,
-      ),
-    });
     await spend(2, '2026-02-10', '2026-02-11');
+    await spend(1, '2026-03-15', '2026-03-15');
     await spend(1, '2026-04-20', '2026-04-20');
-    await spend(1, '2026-03-15', '2026-03-15', { leaveTypeId: sickId });
-    await spend(1, '2026-05-05', '2026-05-05', { leaveTypeId: sickId });
+    await spend(1, '2026-05-05', '2026-05-05');
   }
 
-  it('TC-SUM-01 / TC-DASH-01: the reference dataset is 18 / 5 / 13 for the employee and for the whole year', async () => {
+  it('TC-SUM-01 / TC-DASH-01: the reference dataset is 10 / 5 / 5 for the employee and for the whole year', async () => {
     await juan2026();
     const rows = await balances.getBalancesForEmployeeYear(juanId, 2026);
-    const types = await leaveTypes.listLeaveTypes();
-    const summary = summarizeBalances(rows, types);
-    expect(summary.totals).toEqual({ totalCredits: 18, totalUsed: 5, totalUnused: 13 });
+    expect(sumTotals(rows)).toEqual({ totalCredits: 10, totalUsed: 5, totalUnused: 5 });
     // The dashboard sums the year's balances in the browser (no aggregation query / index needed).
     const year = await balances.getYearBalances(2026);
-    expect(sumTotals(year)).toEqual({ totalCredits: 18, totalUsed: 5, totalUnused: 13 });
-    expect(sumTotals(year.filter((b) => b.leaveTypeId === vacId))).toEqual({
-      totalCredits: 10,
-      totalUsed: 3,
-      totalUnused: 7,
-    });
+    expect(sumTotals(year)).toEqual({ totalCredits: 10, totalUsed: 5, totalUnused: 5 });
     expect(sumTotals(await balances.getYearBalances(2025))).toEqual({
       totalCredits: 0,
       totalUsed: 0,
@@ -804,12 +759,12 @@ describe('queries and aggregates', () => {
   it('balance reads: one, per employee-year, per employee set, per year', async () => {
     await juan2026();
     await alloc(4, { employeeId: anaId });
-    expect((await balances.getBalance(juanId, 2026, vacId))?.availableCredits).toBe(7);
-    expect(await balances.getBalance(juanId, 2026, 'nope')).toBeNull();
-    expect(await balances.getBalancesForEmployeeYear(juanId, 2026)).toHaveLength(3);
-    expect(await balances.getBalancesForEmployees([juanId, anaId], 2026)).toHaveLength(4);
+    expect((await balances.getBalance(juanId, 2026))?.availableCredits).toBe(5);
+    expect(await balances.getBalance(juanId, 2025)).toBeNull();
+    expect(await balances.getBalancesForEmployeeYear(juanId, 2026)).toHaveLength(1);
+    expect(await balances.getBalancesForEmployees([juanId, anaId], 2026)).toHaveLength(2);
     expect(await balances.getBalancesForEmployees([], 2026)).toHaveLength(0);
-    expect(await balances.getYearBalances(2026)).toHaveLength(4);
+    expect(await balances.getYearBalances(2026)).toHaveLength(2);
     expect(await balances.getYearBalances(2027)).toHaveLength(0);
   });
 
@@ -854,9 +809,10 @@ describe('queries and aggregates', () => {
     expect(
       (await ledger.listLedgerPage({ year: 2026, transactionType: 'ALLOCATION' })).items,
     ).toHaveLength(1);
-    expect((await ledger.listLedgerPage({ year: 2026, leaveTypeId: sickId })).items).toHaveLength(
-      0,
-    );
+    expect((await ledger.listLedgerPage({ year: 2026, employeeId: anaId })).items).toHaveLength(0);
+    expect(
+      (await ledger.listLedgerPage({ year: 2026, employeeId: juanId, pageSize: 50 })).items,
+    ).toHaveLength(28);
     expect((await ledger.listLedgerPage({ year: 2025 })).items).toHaveLength(0);
   });
 
@@ -870,6 +826,121 @@ describe('queries and aggregates', () => {
     expect(overlap).toHaveLength(1);
     expect(overlap[0]?.transactionType).toBe('USAGE');
     expect(await ledger.findUsageForOverlap(anaId, 2026)).toHaveLength(0);
+  });
+});
+
+describe('deleting employees (only those without leave records)', () => {
+  it('deletes an employee with no records together with its Employee-ID reservation, and the ID can be reused', async () => {
+    expect(await raw('employeeNumbers', 'EMP-0043')).not.toBeNull();
+    await employees.deleteEmployee(anaId);
+    expect(await raw('employees', anaId)).toBeNull();
+    expect(await raw('employeeNumbers', 'EMP-0043')).toBeNull();
+    const again = await employees.createEmployee(
+      {
+        employeeNumber: 'EMP-0043',
+        fullName: 'New Ana',
+        position: 'Clerk',
+        department: null,
+        employmentStatus: 'Regular',
+      },
+      actor.uid,
+    );
+    expect(again).not.toBe(anaId);
+  });
+
+  it('refuses an employee that has a balance or a ledger entry, and changes nothing', async () => {
+    await alloc(10); // Juan
+    const before = await readEverything();
+    expect(await errorCodeOf(employees.deleteEmployee(juanId))).toBe('EMPLOYEE_HAS_RECORDS');
+    expect(await raw('employees', juanId)).not.toBeNull();
+    expect(await raw('employeeNumbers', 'EMP-0042')).not.toBeNull();
+    expect(await readEverything()).toEqual(before);
+  });
+
+  it('refuses even when the only record is a fully reversed entry (the history still exists)', async () => {
+    const entry = await alloc(10);
+    await ledger.reverseEntry({
+      originalTransactionId: entry.transactionId,
+      reason: 'Entered by mistake',
+      actor,
+    });
+    expect(await errorCodeOf(employees.deleteEmployee(juanId))).toBe('EMPLOYEE_HAS_RECORDS');
+  });
+
+  it('finds which employees have records', async () => {
+    await alloc(10); // Juan only
+    const blocked = await employees.findEmployeesWithLeaveRecords([juanId, anaId]);
+    expect([...blocked]).toEqual([juanId]);
+    expect((await employees.findEmployeesWithLeaveRecords([])).size).toBe(0);
+  });
+
+  it('bulk delete: removes the deletable ones, reports the protected one, and the ledger still reconciles', async () => {
+    await alloc(10); // Juan has records
+    const extra = await employees.createEmployee(
+      {
+        employeeNumber: 'EMP-0099',
+        fullName: 'Temp Person',
+        position: 'Temp',
+        department: null,
+        employmentStatus: 'Part-Time',
+      },
+      actor.uid,
+    );
+    const results = await employees.deleteEmployeesBulk([juanId, anaId, extra]);
+    expect(
+      results.map((r) => [
+        r.employeeId === juanId ? 'juan' : r.employeeId === anaId ? 'ana' : 'extra',
+        r.ok,
+        r.code,
+      ]),
+    ).toEqual([
+      ['juan', false, 'EMPLOYEE_HAS_RECORDS'],
+      ['ana', true, null],
+      ['extra', true, null],
+    ]);
+    expect(await raw('employees', juanId)).not.toBeNull();
+    expect(await raw('employees', anaId)).toBeNull();
+    expect(await raw('employeeNumbers', 'EMP-0099')).toBeNull();
+  });
+
+  it('deleting an employee that is already gone counts as done', async () => {
+    await employees.deleteEmployee(anaId);
+    await expect(employees.deleteEmployee(anaId)).resolves.toBeUndefined();
+  });
+
+  it('a deleted employee can no longer receive credits (the rules refuse the missing employee)', async () => {
+    await employees.deleteEmployee(anaId);
+    const error = await errorCodeOf(alloc(5, { employeeId: anaId }));
+    expect(['NOT_FOUND', 'PERMISSION_DENIED']).toContain(error);
+    expect((await readEverything()).ledger).toHaveLength(0);
+  });
+
+  it('bulk archive and restore change only the flags and never touch history', async () => {
+    await alloc(10);
+    const before = await readEverything();
+    const archived = await employees.archiveEmployeesBulk([juanId, anaId], actor.uid);
+    expect(archived.every((r) => r.ok)).toBe(true);
+    expect(await raw('employees', juanId)).toMatchObject({
+      isArchived: true,
+      archivedBy: actor.uid,
+    });
+    expect(await raw('employees', anaId)).toMatchObject({ isArchived: true });
+    expect(await readEverything()).toEqual(before);
+    const restored = await employees.restoreEmployeesBulk([juanId, anaId], actor.uid);
+    expect(restored.every((r) => r.ok)).toBe(true);
+    expect(await raw('employees', juanId)).toMatchObject({
+      isArchived: false,
+      archivedAt: null,
+      archivedBy: null,
+    });
+  });
+
+  it('a deactivated user can delete nothing', async () => {
+    await seedUserProfile(rulesEnv, actor.uid, { email: 'hr@example.test', isActive: false });
+    const results = await employees.deleteEmployeesBulk([anaId]);
+    expect(results[0]).toMatchObject({ ok: false, code: 'PERMISSION_DENIED' });
+    await seedUserProfile(rulesEnv, actor.uid, { email: 'hr@example.test' });
+    expect(await raw('employees', anaId)).not.toBeNull();
   });
 });
 

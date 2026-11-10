@@ -14,7 +14,7 @@ import {
   buildUsageEntry,
   makeBalanceId,
 } from '@/domain/ledger';
-import type { Actor, BalanceTotals, Employee, LeaveTransaction, LeaveType } from '@/types/models';
+import type { Actor, BalanceTotals, Employee, LeaveTransaction } from '@/types/models';
 
 /**
  * Shared fixtures for the ledger rules + integration suites. Valid documents are produced by the
@@ -30,9 +30,6 @@ export const HR_NAME = 'Maria Santos';
 export const ACTOR: Actor = { uid: HR_UID, name: HR_NAME };
 
 export const EMP_ID = 'empA';
-export const TYPE_VAC = 'vac';
-export const TYPE_SICK = 'sick';
-export const TYPE_OLD = 'old';
 export const EMP_ARCHIVED = 'empArch';
 
 export const employee: Employee = {
@@ -53,28 +50,12 @@ export const employee: Employee = {
 };
 export const archivedEmployee: Employee = { ...employee, id: EMP_ARCHIVED, isArchived: true };
 
-function leaveType(id: string, name: string, isActive = true): LeaveType {
-  return {
-    id,
-    name,
-    description: null,
-    isActive,
-    createdAt: null,
-    createdBy: HR_UID,
-    updatedAt: null,
-    updatedBy: HR_UID,
-  };
-}
-export const vacation = leaveType(TYPE_VAC, 'Vacation Leave');
-export const sick = leaveType(TYPE_SICK, 'Sick Leave');
-export const oldType = leaveType(TYPE_OLD, 'Old Leave', false);
-
 /** Deterministic 20-character alphanumeric ids (the shape of a Firestore auto-id). */
 export function txnId(n: number): string {
   return `Tx${String(n).padStart(18, '0')}`;
 }
 
-/** Seeds employees and leave types with security rules disabled (what earlier phases create). */
+/** Seeds employees with security rules disabled (what earlier phases create). */
 export async function seedMasterData(env: RulesTestEnvironment): Promise<void> {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -89,17 +70,6 @@ export async function seedMasterData(env: RulesTestEnvironment): Promise<void> {
         isArchived: e.isArchived,
         archivedAt: e.isArchived ? SEED_TIME : null,
         archivedBy: e.isArchived ? HR_UID : null,
-        createdAt: SEED_TIME,
-        createdBy: HR_UID,
-        updatedAt: SEED_TIME,
-        updatedBy: HR_UID,
-      });
-    }
-    for (const t of [vacation, sick, oldType]) {
-      await setDoc(doc(db, 'leaveTypes', t.id), {
-        name: t.name,
-        description: null,
-        isActive: t.isActive,
         createdAt: SEED_TIME,
         createdBy: HR_UID,
         updatedAt: SEED_TIME,
@@ -126,7 +96,7 @@ export interface Pair {
 }
 
 function balanceData(
-  entry: { employeeId: string; leaveTypeId: string; leaveYear: number },
+  entry: { employeeId: string; leaveYear: number },
   totals: BalanceTotals,
   lastTransactionId: string,
   isNew: boolean,
@@ -143,7 +113,6 @@ function balanceData(
   return isNew
     ? {
         employeeId: entry.employeeId,
-        leaveTypeId: entry.leaveTypeId,
         year: entry.leaveYear,
         ...changing,
         createdAt: serverTimestamp(),
@@ -155,18 +124,15 @@ export function allocationPair(opts: {
   id: string;
   days: number;
   year?: number;
-  type?: LeaveType;
   emp?: Employee;
   balance?: BalanceTotals | null;
   remarks?: string | null;
 }): Pair {
   const year = opts.year ?? 2026;
-  const type = opts.type ?? vacation;
   const emp = opts.emp ?? employee;
   const balance = opts.balance ?? null;
   const built = buildAllocationEntry({
     employee: emp,
-    leaveType: type,
     year,
     days: opts.days,
     balance,
@@ -189,14 +155,11 @@ export function usagePair(opts: {
   dateFrom: string;
   dateTo: string;
   year?: number;
-  type?: LeaveType;
   balance: BalanceTotals;
 }): Pair {
   const year = opts.year ?? 2026;
-  const type = opts.type ?? vacation;
   const built = buildUsageEntry({
     employee,
-    leaveType: type,
     year,
     days: opts.days,
     dateFrom: opts.dateFrom,

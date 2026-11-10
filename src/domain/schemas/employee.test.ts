@@ -90,7 +90,7 @@ describe('employeeSchema — other fields and limits', () => {
       'position: Position is too long (80 characters max).',
     ]);
     expect(issues({ ...valid, department: 'x'.repeat(81) })).toEqual([
-      'department: Department is too long (80 characters max).',
+      'department: Location is too long (80 characters max).',
     ]);
     expect(
       employeeSchema.safeParse({

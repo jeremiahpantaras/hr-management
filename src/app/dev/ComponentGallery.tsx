@@ -5,8 +5,6 @@ import { toast } from 'sonner';
 import { DataTable, type DataTableColumn, type SortState } from '@/components/data/DataTable';
 import { EmployeeCombobox } from '@/components/data/EmployeeCombobox';
 import { FilterDropdown } from '@/components/data/FilterDropdown';
-import { LeaveBalanceCard } from '@/components/data/LeaveBalanceCard';
-import { LeaveBreakdownTable } from '@/components/data/LeaveBreakdownTable';
 import { Pagination } from '@/components/data/Pagination';
 import { ProgressBar } from '@/components/data/ProgressBar';
 import { SearchInput } from '@/components/data/SearchInput';
@@ -26,7 +24,7 @@ import { TextField } from '@/components/form/TextField';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -120,7 +118,7 @@ const demoColumns: readonly DataTableColumn<DemoRow>[] = [
     isRowHeader: true,
   },
   { id: 'position', header: 'Position', cell: (row) => row.position, priority: 'low' },
-  { id: 'department', header: 'Department', cell: (row) => row.department, priority: 'low' },
+  { id: 'department', header: 'Location', cell: (row) => row.department, priority: 'low' },
   { id: 'status', header: 'Status', cell: (row) => <StatusBadge>{row.status}</StatusBadge> },
   { id: 'amount', header: 'Days', cell: () => '2.5', align: 'right' },
 ];
@@ -189,7 +187,7 @@ export function ComponentGallery() {
           <CardContent className="flex flex-col gap-2">
             <p className="text-page-title">Page title — Leave Credits</p>
             <p className="text-section">Section heading — Recent transactions</p>
-            <p className="text-card-title">Card heading — Vacation Leave</p>
+            <p className="text-card-title">Card heading</p>
             <p className="text-sm">Body text — Juan Dela Cruz filed 2 days of vacation leave.</p>
             <p className="text-sm font-medium">Label — Employee ID</p>
             <p className="text-sm text-fg-muted">Supporting text — Assigned manually by HR.</p>
@@ -316,57 +314,6 @@ export function ComponentGallery() {
           />
           <StatCard label="Loading" value="" loading />
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <LeaveBalanceCard leaveTypeName="Vacation Leave" total={10} used={3} unused={7} />
-          <LeaveBalanceCard leaveTypeName="Sick Leave" total={5} used={2} unused={3} />
-          <LeaveBalanceCard leaveTypeName="Old type" total={3} used={3} unused={0} inactive />
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Leave breakdown</CardTitle>
-            <CardDescription>Juan Dela Cruz · 2026</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <LeaveBreakdownTable
-              caption="Leave breakdown for Juan Dela Cruz, 2026"
-              rows={[
-                {
-                  id: 'v',
-                  leaveTypeName: 'Vacation Leave',
-                  total: 10,
-                  used: 3,
-                  unused: 7,
-                  hasBalance: true,
-                },
-                {
-                  id: 's',
-                  leaveTypeName: 'Sick Leave',
-                  total: 5,
-                  used: 2,
-                  unused: 3,
-                  hasBalance: true,
-                },
-                {
-                  id: 'e',
-                  leaveTypeName: 'Emergency Leave',
-                  total: 3,
-                  used: 0,
-                  unused: 3,
-                  hasBalance: true,
-                },
-                {
-                  id: 'o',
-                  leaveTypeName: 'Other Leave',
-                  total: 0,
-                  used: 0,
-                  unused: 0,
-                  hasBalance: false,
-                },
-              ]}
-              totals={{ total: 18, used: 5, unused: 13 }}
-            />
-          </CardContent>
-        </Card>
       </Section>
 
       <Section title="Filters and pagination">

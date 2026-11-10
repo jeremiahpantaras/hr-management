@@ -12,8 +12,7 @@ import type { LeaveBalance } from '@/types/models';
 /** Balance query keys (Architecture §6.2). Balances are fresh for 60 s (README §4). */
 export const balanceKeys = {
   all: ['balances'] as const,
-  one: (employeeId: string, year: number, leaveTypeId: string) =>
-    ['balances', 'one', employeeId, year, leaveTypeId] as const,
+  one: (employeeId: string, year: number) => ['balances', 'one', employeeId, year] as const,
   employeeYear: (employeeId: string, year: number) =>
     ['balances', 'employee', employeeId, year] as const,
   forEmployees: (ids: readonly string[], year: number) =>
@@ -24,13 +23,11 @@ export const balanceKeys = {
 export function useBalance(
   employeeId: string | null,
   year: number,
-  leaveTypeId: string | null,
 ): UseQueryResult<LeaveBalance | null, Error> {
-  const enabled = Boolean(employeeId) && Boolean(leaveTypeId);
   return useQuery({
-    queryKey: balanceKeys.one(employeeId ?? '', year, leaveTypeId ?? ''),
-    queryFn: () => getBalance(employeeId ?? '', year, leaveTypeId ?? ''),
-    enabled,
+    queryKey: balanceKeys.one(employeeId ?? '', year),
+    queryFn: () => getBalance(employeeId ?? '', year),
+    enabled: Boolean(employeeId),
     staleTime: 0, // the allocation preview must show the current balance
   });
 }

@@ -230,7 +230,7 @@ function EmployeeFormDialogContent({
                 <Input {...field} {...register('position')} autoComplete="off" disabled={pending} />
               )}
             </FormField>
-            <FormField label="Department" error={errors.department?.message}>
+            <FormField label="Location" error={errors.department?.message}>
               {(field) => (
                 <Input
                   {...field}

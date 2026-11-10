@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 
 import { DataTable, type DataTableColumn } from '@/components/data/DataTable';
 import { EmployeeCombobox } from '@/components/data/EmployeeCombobox';
-import { FilterDropdown } from '@/components/data/FilterDropdown';
 import { Pagination } from '@/components/data/Pagination';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,6 @@ import { effectLabel, isReversible } from '@/domain/ledgerDisplay';
 import { useEmployees } from '@/features/employees/hooks/useEmployees';
 import { flattenLedger, useLedgerList } from '@/features/leave-history/hooks/useLedger';
 import { LedgerStatus } from '@/features/leave-history/LedgerBadges';
-import { useLeaveTypes } from '@/features/leave-types/hooks/useLeaveTypes';
 import type { LeaveTransaction } from '@/types/models';
 import { formatTimestamp } from '@/utils/format';
 
@@ -25,18 +23,15 @@ interface AllocationHistoryProps {
 /** Leave Credits → Allocation history (UI spec §6.7): the year's ALLOCATION entries, newest first. */
 export function AllocationHistory({ year, onAllocate, onReverse }: AllocationHistoryProps) {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
-  const [leaveTypeId, setLeaveTypeId] = useState('');
   const employees = useEmployees();
-  const types = useLeaveTypes();
 
   const query = useLedgerList({
     year,
     transactionType: 'ALLOCATION',
     ...(employeeId ? { employeeId } : {}),
-    ...(leaveTypeId ? { leaveTypeId } : {}),
   });
   const rows = useMemo(() => flattenLedger(query.data), [query.data]);
-  const hasFilters = employeeId !== null || leaveTypeId !== '';
+  const hasFilters = employeeId !== null;
 
   const columns: readonly DataTableColumn<LeaveTransaction>[] = [
     {
@@ -45,11 +40,6 @@ export function AllocationHistory({ year, onAllocate, onReverse }: AllocationHis
       cell: (e) => (e.createdAt ? formatTimestamp(e.createdAt) : '—'),
     },
     { id: 'employee', header: 'Employee', isRowHeader: true, cell: (e) => e.employeeNameSnapshot },
-    {
-      id: 'type',
-      header: 'Leave type',
-      cell: (e) => `${e.leaveTypeNameSnapshot}`,
-    },
     {
       id: 'credits',
       header: 'Credits added',
@@ -100,19 +90,11 @@ export function AllocationHistory({ year, onAllocate, onReverse }: AllocationHis
             aria-label="Filter by employee"
           />
         </div>
-        <FilterDropdown
-          label="Leave type"
-          allLabel="All leave types"
-          value={leaveTypeId}
-          options={(types.data ?? []).map((type) => ({ value: type.id, label: type.name }))}
-          onChange={setLeaveTypeId}
-        />
         {hasFilters ? (
           <Button
             variant="ghost"
             onClick={() => {
               setEmployeeId(null);
-              setLeaveTypeId('');
             }}
           >
             Clear filters

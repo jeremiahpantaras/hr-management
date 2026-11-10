@@ -47,19 +47,13 @@ export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 /** The two types that can be reversed. */
 export type ReversibleType = Exclude<TransactionType, 'REVERSAL'>;
 
-export const LEAVE_TYPE_FIELD_LIMITS = { name: 60, description: 200 } as const;
-
 /** Ledger lists page by cursor; the credits matrix pages employees (≤ 30 for Firestore `in`). */
 export const LEDGER_PAGE_SIZE = 25;
 export const CREDITS_MATRIX_PAGE_SIZE = 25;
 
-/** Starter leave types offered on an empty list (FR-LT-07). */
-export const STARTER_LEAVE_TYPES = ['Vacation Leave', 'Sick Leave', 'Emergency Leave'] as const;
-
 /** TanStack Query freshness windows (README §4). */
 export const STALE_TIME_MS = {
   employees: 5 * 60_000,
-  leaveTypes: 5 * 60_000,
   balances: 60_000,
   ledger: 30_000,
   dashboard: 60_000,

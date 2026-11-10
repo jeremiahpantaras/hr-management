@@ -19,7 +19,6 @@ import {
 } from '@/domain/schemas/auth';
 import { authErrorMessage } from '@/features/auth/authErrors';
 import { useAuth } from '@/features/auth/useAuth';
-import { SettingsLayout } from '@/features/settings/SettingsLayout';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { changePassword } from '@/services/auth.service';
 import { AuthServiceError } from '@/services/auth.errors';
@@ -221,29 +220,27 @@ export function AccountSettingsPage() {
   return (
     <PageContainer>
       <PageHeader title="Account" description="Your profile and password." />
-      <SettingsLayout>
-        <div className="flex flex-col gap-6">
-          <ProfileCard />
-          <PasswordCard />
-          <Card>
-            <CardHeader>
-              <CardTitle>Session</CardTitle>
-              <CardDescription>Sign out of this device.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  void signOut();
-                }}
-              >
-                <LogOut aria-hidden="true" />
-                Log out
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </SettingsLayout>
+      <div className="flex flex-col gap-6">
+        <ProfileCard />
+        <PasswordCard />
+        <Card>
+          <CardHeader>
+            <CardTitle>Session</CardTitle>
+            <CardDescription>Sign out of this device.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void signOut();
+              }}
+            >
+              <LogOut aria-hidden="true" />
+              Log out
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </PageContainer>
   );
 }

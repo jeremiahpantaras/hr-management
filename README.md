@@ -1,6 +1,6 @@
 # HR Leave Monitoring System
 
-A web app for HR to track employee leave credits and usage: assign credits per employee, leave type and
+A web app for HR to track employee leave credits and usage: assign each employee's leave credits for the
 year, record leave taken, correct mistakes through reversals, and export reports to Excel. It replaces
 spreadsheet tracking. One role — **HR administrator** — and no public sign-up.
 
@@ -58,6 +58,14 @@ configuration. Real project values, when the time comes, belong in `.env.develop
 Full design: [`planning/`](planning/) (requirements, architecture, database, security, UI, roadmap, business rules).
 Build history, deviations and verification evidence: [`planning/IMPLEMENTATION_PROGRESS.md`](planning/IMPLEMENTATION_PROGRESS.md).
 
+## Employees: select, archive, restore, delete
+
+Tick employees (or the header box for the whole page, then **Select all N matching**) to get a bar with **Archive**,
+**Restore** and **Delete**. Archiving is the normal way to retire someone and is always reversible. **Delete is
+permanent** and only works for employees with **no leave records**; anyone with a balance or history is named in the
+confirmation and kept. Deleting also frees the Employee ID. If you change `firestore.rules`, re-deploy them
+(`firebase deploy --only firestore:rules`) or deleting will be refused by the server.
+
 ## Employees: import and export (Excel)
 
 On the Employees page, **Export** downloads the current view (or everyone, archived included) as an `.xlsx`
@@ -67,12 +75,23 @@ every row _before_ saving anything, and then creates only the valid rows — exi
 duplicate Employee IDs (any case, archived included) are skipped. Limits: 500 employees and 5 MB per file. An
 exported file can be imported again.
 
+## Leave credits report (Excel)
+
+**Reports** produces the sheet your HR team already uses, one row per employee: **NAME · POSITION · LOCATION · TOTAL
+NO. OF UNUSED LEAVE CREDITS · JAN…DEC · TOTAL OF USED LEAVE · TOTAL REMAINING LEAVES**, under a title such as
+`BAGO PLANT LEAVE CREDITS AS OF AUGUST 2026` and the blue _EMPLOYEE'S INFORMATION_ / red _USED CREDITS AND DATE_ bands.
+An employee who has used every credit gets a dark row with white text. Pick the year, the "as of" month, an optional
+single employee and **Letter or A4** (landscape or portrait): it fits one page wide, repeats the three header rows on
+every page and numbers the pages. The title is editable and remembered. Each month holds the days whose leave
+**starts** in that month (reversed entries cancel out); there are no leave types — every employee has one pool of
+credits per year. The same figures are shown on screen under **Preview**, so the screen and the file cannot disagree.
+
 ## Project layout
 
 ```
 src/app          router, providers, guards          src/domain     pure business logic (no Firebase, no React)
 src/components   ui · layout · data · form · feedback   src/services   the only code that talks to Firebase
-src/features     auth · employees · leave-types · leave-credits · leave-usage · leave-history ·
+src/features     auth · employees · leave-credits · leave-usage · leave-history ·
                  dashboard · reports · settings      src/utils/excel  workbook builder (SheetJS, lazy-loaded)
 tests/rules      Security Rules tests               tests/integration  service tests on the emulators
 firestore.rules  firestore.indexes.json  firebase.json (emulators + hosting config, not deployed)

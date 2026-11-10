@@ -30,19 +30,11 @@ function toBalances(docs: readonly QueryDocumentSnapshot<DocumentData>[]): Leave
 
 const balances = () => collection(getFirebase().db, COLLECTIONS.leaveBalances);
 
-/** One balance, or `null` when no credits were ever allocated for that employee × year × type. */
-export async function getBalance(
-  employeeId: string,
-  year: number,
-  leaveTypeId: string,
-): Promise<LeaveBalance | null> {
+/** One balance, or `null` when no credits were ever allocated for that employee × year. */
+export async function getBalance(employeeId: string, year: number): Promise<LeaveBalance | null> {
   try {
     const snapshot = await getDoc(
-      doc(
-        getFirebase().db,
-        COLLECTIONS.leaveBalances,
-        makeBalanceId(employeeId, year, leaveTypeId),
-      ),
+      doc(getFirebase().db, COLLECTIONS.leaveBalances, makeBalanceId(employeeId, year)),
     );
     return snapshot.exists() ? toLeaveBalance(snapshot.id, snapshot.data()) : null;
   } catch (error) {
@@ -50,7 +42,7 @@ export async function getBalance(
   }
 }
 
-/** Every balance of one employee for a year (at most one per leave type). */
+/** The balance of one employee for a year as a list (empty, or one entry). */
 export async function getBalancesForEmployeeYear(
   employeeId: string,
   year: number,

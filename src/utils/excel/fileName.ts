@@ -1,22 +1,16 @@
-import { format } from 'date-fns';
+import { PAPER_LABELS, type PaperSize } from '@/utils/excel/xlsxPatch';
 
-/** Keeps only `[A-Za-z0-9._-]` so an Employee ID can never produce an unsafe file name. */
-export function sanitizeFilePart(value: string): string {
-  const cleaned = value.replace(/[^A-Za-z0-9._-]/g, '');
-  return cleaned === '' ? 'employee' : cleaned;
+/** Keeps only `[A-Za-z0-9._-]` so a title can never produce an unsafe file name. */
+export function sanitizeFilePart(value: string, fallback = 'report'): string {
+  const cleaned = value
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._-]/g, '')
+    .replace(/^[.-]+|[.-]+$/g, '');
+  return cleaned === '' ? fallback : cleaned;
 }
 
-/**
- * UI spec §14: overall `HR-Leave-Report_{year}_{yyyyMMdd-HHmm}.xlsx`; individual
- * `Leave-Report_{employeeNumber}_{year}_{yyyyMMdd-HHmm}.xlsx`.
- */
-export function reportFileName(
-  year: number,
-  generatedAt: Date,
-  employeeNumber?: string | null,
-): string {
-  const stamp = format(generatedAt, 'yyyyMMdd-HHmm');
-  return employeeNumber
-    ? `Leave-Report_${sanitizeFilePart(employeeNumber)}_${String(year)}_${stamp}.xlsx`
-    : `HR-Leave-Report_${String(year)}_${stamp}.xlsx`;
+/** `BAGO-PLANT-LEAVE-CREDITS-AS-OF-AUGUST-2026_A4.xlsx` */
+export function leaveCreditsFileName(heading: string, paper: PaperSize): string {
+  return `${sanitizeFilePart(heading, 'Leave-Credits')}_${PAPER_LABELS[paper]}.xlsx`;
 }

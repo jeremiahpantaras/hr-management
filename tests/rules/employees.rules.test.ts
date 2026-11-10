@@ -376,17 +376,120 @@ describe('create: server-controlled metadata cannot be spoofed', () => {
   });
 });
 
-describe('TC-RULES-EMP-07: employees are never deleted', () => {
-  it('denies deleting an employee, even together with its reservation', async () => {
+describe('TC-RULES-EMP-07: deleting an employee (always together with its ID reservation)', () => {
+  // (the callback of withSecurityRulesDisabled must return void, so capture the answer)
+  const exists = async (path: string, id: string): Promise<boolean> => {
+    let found = false;
+    await env.withSecurityRulesDisabled(async (c) => {
+      found = (await getDoc(doc(c.firestore(), path, id))).exists();
+    });
+    return found;
+  };
+
+  function deleteBoth(db: Db, employeeId: string, number: string) {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'employees', employeeId));
+    batch.delete(doc(db, 'employeeNumbers', number));
+    return batch.commit();
+  }
+
+  it('allows deleting an employee together with its reservation, and frees the Employee ID', async () => {
+    await assertSucceeds(deleteBoth(hr(), 'empA', 'EMP-0001'));
+    expect(await exists('employees', 'empA')).toBe(false);
+    expect(await exists('employeeNumbers', 'EMP-0001')).toBe(false);
+    // the ID can be used again
+    await assertSucceeds(
+      createCommit(
+        hr(),
+        'empNew',
+        newEmployee({ employeeNumber: 'EMP-0001', employeeNumberKey: 'EMP-0001' }),
+      ),
+    );
+  });
+
+  it('allows deleting an archived employee the same way', async () => {
+    await seedEmployee('empArch', 'EMP-0300', {
+      isArchived: true,
+      archivedAt: SEED_TIME,
+      archivedBy: 'hr1',
+    });
+    await assertSucceeds(deleteBoth(hr(), 'empArch', 'EMP-0300'));
+  });
+
+  it('allows deleting several employees in one commit', async () => {
+    const db = hr();
+    const batch = writeBatch(db);
+    for (const [id, number] of [
+      ['empA', 'EMP-0001'],
+      ['empB', 'EMP-0002'],
+    ] as const) {
+      batch.delete(doc(db, 'employees', id));
+      batch.delete(doc(db, 'employeeNumbers', number));
+    }
+    await assertSucceeds(batch.commit());
+  });
+
+  it('denies deleting the employee alone — the reservation would be left blocking the ID', async () => {
     await assertFails(deleteDoc(doc(hr(), 'employees', 'empA')));
+    expect(await exists('employees', 'empA')).toBe(true);
+  });
+
+  it('denies deleting the reservation alone while the employee still exists', async () => {
+    await assertFails(deleteDoc(doc(hr(), 'employeeNumbers', 'EMP-0001')));
+  });
+
+  it("denies deleting an employee together with SOMEONE ELSE's reservation (and not its own)", async () => {
+    const db = hr();
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'employees', 'empA'));
+    batch.delete(doc(db, 'employeeNumbers', 'EMP-0002')); // empB's
+    await assertFails(batch.commit());
+  });
+
+  it("denies deleting another employee's reservation while deleting a different employee", async () => {
     const db = hr();
     const batch = writeBatch(db);
     batch.delete(doc(db, 'employees', 'empA'));
     batch.delete(doc(db, 'employeeNumbers', 'EMP-0001'));
+    batch.delete(doc(db, 'employeeNumbers', 'EMP-0002')); // empB still exists
     await assertFails(batch.commit());
+    expect(await exists('employees', 'empA')).toBe(true);
+  });
+
+  it('allows cleaning up an orphaned reservation whose employee is already gone', async () => {
     await env.withSecurityRulesDisabled(async (c) => {
-      expect((await getDoc(doc(c.firestore(), 'employees', 'empA'))).exists()).toBe(true);
+      await setDoc(doc(c.firestore(), 'employeeNumbers', 'ORPHAN-1'), {
+        employeeId: 'ghost',
+        createdAt: SEED_TIME,
+      });
     });
+    await assertSucceeds(deleteDoc(doc(hr(), 'employeeNumbers', 'ORPHAN-1')));
+  });
+
+  it('the employee rule itself checks the caller (isolated: an employee whose reservation is already gone)', async () => {
+    await env.withSecurityRulesDisabled(async (c) => {
+      await deleteDoc(doc(c.firestore(), 'employeeNumbers', 'EMP-0001'));
+    });
+    for (const context of [
+      env.unauthenticatedContext(),
+      env.authenticatedContext('nobody'),
+      env.authenticatedContext('inactive1'),
+      env.authenticatedContext('wrongrole1'),
+    ]) {
+      await assertFails(deleteDoc(doc(context.firestore(), 'employees', 'empA')));
+    }
+    expect(await exists('employees', 'empA')).toBe(true);
+    await assertSucceeds(deleteDoc(doc(hr(), 'employees', 'empA')));
+  });
+
+  it.each([
+    ['an anonymous user', () => env.unauthenticatedContext()],
+    ['a signed-in user without a profile', () => env.authenticatedContext('nobody')],
+    ['a deactivated admin', () => env.authenticatedContext('inactive1')],
+    ['a user with another role', () => env.authenticatedContext('wrongrole1')],
+  ])('denies %s', async (_label, context) => {
+    await assertFails(deleteBoth(context().firestore(), 'empA', 'EMP-0001'));
+    expect(await exists('employees', 'empA')).toBe(true);
   });
 });
 

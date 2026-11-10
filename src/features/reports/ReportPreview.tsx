@@ -1,22 +1,33 @@
 import { AlertTriangle, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { ScrollRegion } from '@/components/ui/scroll-region';
 import { Card, CardContent } from '@/components/ui/card';
-import { describeTotals, type ReportModel } from '@/domain/report';
-import { SHEET_NAMES } from '@/utils/excel/formats';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { formatDays } from '@/domain/days';
+import { describeTotals, MONTH_LABELS, type ReportModel } from '@/domain/report';
+import { cn } from '@/lib/cn';
 
-/** Counts, totals and reconciliation of a generated report (UI spec §6.12). */
+/**
+ * The report as it will appear in the workbook (same model): the heading, the two bands, the column
+ * headers and one row per employee. An employee with every credit used has a dark row.
+ */
 export function ReportPreview({ report }: { readonly report: ReportModel }) {
-  const { info } = report;
-  const empty = info.breakdownRowCount === 0 && info.transactionRowCount === 0;
   const mismatched = new Set(report.mismatches.map((m) => m.balanceId)).size;
 
-  if (empty) {
+  if (report.rows.length === 0) {
     return (
       <Card>
         <EmptyState
           icon={FileSpreadsheet}
-          title={`There are no records for ${String(info.year)} with these filters.`}
+          title={`There are no employees to report for ${String(report.filters.year)} with these filters.`}
           description="Change the filters and preview again."
         />
       </Card>
@@ -34,19 +45,95 @@ export function ReportPreview({ report }: { readonly report: ReportModel }) {
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <span>
               {mismatched} {mismatched === 1 ? 'balance doesn’t' : 'balances don’t'} match their
-              transaction history. The export still includes both; see Report Info.
+              transaction history. The report shows the stored balances; check Leave History for the
+              affected employees.
             </span>
           </div>
         ) : null}
-        <p className="text-sm text-fg">
-          {info.employeeCount} {info.employeeCount === 1 ? 'employee' : 'employees'} ·{' '}
-          {info.breakdownRowCount} balance {info.breakdownRowCount === 1 ? 'row' : 'rows'} ·{' '}
-          {info.transactionRowCount}{' '}
-          {info.transactionRowCount === 1 ? 'transaction' : 'transactions'}
-        </p>
+        <h2 className="text-center text-section font-semibold text-fg">{report.heading}</h2>
+        <ScrollRegion label="Leave credits report preview">
+          <Table className="text-xs whitespace-nowrap">
+            <TableHeader>
+              <TableRow>
+                <TableHead colSpan={3} className="bg-primary text-center text-primary-fg">
+                  EMPLOYEE&apos;S INFORMATION
+                </TableHead>
+                <TableHead colSpan={16} className="bg-danger text-center text-primary-fg">
+                  USED CREDITS AND DATE
+                </TableHead>
+              </TableRow>
+              <TableRow>
+                <TableHead className="text-fg">NAME</TableHead>
+                <TableHead className="text-fg">POSITION</TableHead>
+                <TableHead className="text-fg">LOCATION</TableHead>
+                <TableHead className="text-center text-fg">
+                  TOTAL NO. OF UNUSED LEAVE CREDITS
+                </TableHead>
+                {MONTH_LABELS.map((month) => (
+                  <TableHead key={month} className="text-center text-fg">
+                    {month}
+                  </TableHead>
+                ))}
+                <TableHead className="text-center text-fg">TOTAL OF USED LEAVE</TableHead>
+                <TableHead className="text-center text-fg">TOTAL REMAINING LEAVES</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {report.rows.map((row) => (
+                <TableRow
+                  key={row.employeeId}
+                  className={cn(row.fullyUsed && 'bg-neutral text-primary-fg hover:bg-neutral')}
+                >
+                  <TableCell className={cn('font-semibold', row.fullyUsed && 'text-primary-fg')}>
+                    {row.name}
+                  </TableCell>
+                  <TableCell className={cn(row.fullyUsed && 'text-primary-fg')}>
+                    {row.position}
+                  </TableCell>
+                  <TableCell className={cn(row.fullyUsed && 'text-primary-fg')}>
+                    {row.location}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-center font-semibold tabular-nums',
+                      row.fullyUsed ? 'text-primary-fg' : 'text-danger',
+                    )}
+                  >
+                    {formatDays(row.totalCredits)}
+                  </TableCell>
+                  {row.months.map((value, index) => (
+                    <TableCell
+                      key={MONTH_LABELS[index]}
+                      className={cn('text-center tabular-nums', row.fullyUsed && 'text-primary-fg')}
+                    >
+                      {value === 0 ? '' : formatDays(value)}
+                    </TableCell>
+                  ))}
+                  <TableCell
+                    className={cn(
+                      'text-center font-semibold tabular-nums',
+                      row.fullyUsed && 'text-primary-fg',
+                    )}
+                  >
+                    {formatDays(row.totalUsed)}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-center font-semibold tabular-nums',
+                      row.fullyUsed ? 'text-primary-fg' : 'text-primary',
+                    )}
+                  >
+                    {formatDays(row.remaining)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ScrollRegion>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg">
           <span>
-            Totals ({info.year}): {describeTotals(report.totals)}
+            {report.rows.length} {report.rows.length === 1 ? 'employee' : 'employees'} · Totals (
+            {report.filters.year}): {describeTotals(report.totals)}
           </span>
           {mismatched === 0 ? (
             <span className="inline-flex items-center gap-1 text-success">
@@ -54,9 +141,6 @@ export function ReportPreview({ report }: { readonly report: ReportModel }) {
               Reconciled
             </span>
           ) : null}
-        </p>
-        <p className="text-sm text-fg-muted">
-          Workbook sheets: {Object.values(SHEET_NAMES).join(' · ')}
         </p>
       </CardContent>
     </Card>

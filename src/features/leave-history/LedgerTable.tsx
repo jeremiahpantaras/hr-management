@@ -47,7 +47,6 @@ export function LedgerTable({
         </span>
       ),
     },
-    { id: 'leaveType', header: 'Leave type', cell: (e) => e.leaveTypeNameSnapshot },
   ];
   if (variant === 'history') {
     columns.push({ id: 'type', header: 'Type', cell: (e) => <TransactionTypeBadge entry={e} /> });

@@ -1,7 +1,7 @@
 import { Timestamp, type DocumentData } from 'firebase/firestore';
 
 import { EMPLOYMENT_STATUSES, TRANSACTION_TYPES, type ReversibleType } from '@/domain/constants';
-import type { Employee, LeaveBalance, LeaveTransaction, LeaveType } from '@/types/models';
+import type { Employee, LeaveBalance, LeaveTransaction } from '@/types/models';
 
 const toDate = (value: unknown): Date | null =>
   value instanceof Timestamp ? value.toDate() : null;
@@ -49,26 +49,9 @@ export function toEmployee(id: string, data: DocumentData): Employee | null {
   };
 }
 
-/** Stored leave type → domain model; `null` for a document without the required shape. */
-export function toLeaveType(id: string, data: DocumentData): LeaveType | null {
-  const name = asString(data.name);
-  if (name === null || typeof data.isActive !== 'boolean') return null;
-  return {
-    id,
-    name,
-    description: asString(data.description),
-    isActive: data.isActive,
-    createdAt: toDate(data.createdAt),
-    createdBy: asString(data.createdBy) ?? '',
-    updatedAt: toDate(data.updatedAt),
-    updatedBy: asString(data.updatedBy) ?? '',
-  };
-}
-
 /** Stored balance → domain model; `null` when any required figure is missing or malformed. */
 export function toLeaveBalance(id: string, data: DocumentData): LeaveBalance | null {
   const employeeId = asString(data.employeeId);
-  const leaveTypeId = asString(data.leaveTypeId);
   const lastTransactionId = asString(data.lastTransactionId);
   const year = asNumber(data.year);
   const totalCredits = asNumber(data.totalCredits);
@@ -76,7 +59,6 @@ export function toLeaveBalance(id: string, data: DocumentData): LeaveBalance | n
   const availableCredits = asNumber(data.availableCredits);
   if (
     employeeId === null ||
-    leaveTypeId === null ||
     lastTransactionId === null ||
     year === null ||
     totalCredits === null ||
@@ -88,7 +70,6 @@ export function toLeaveBalance(id: string, data: DocumentData): LeaveBalance | n
   return {
     id,
     employeeId,
-    leaveTypeId,
     year,
     totalCredits,
     totalUsed,
@@ -107,8 +88,6 @@ export function toLeaveTransaction(id: string, data: DocumentData): LeaveTransac
     employeeNumberSnapshot: asString(data.employeeNumberSnapshot),
     employeeNameSnapshot: asString(data.employeeNameSnapshot),
     positionSnapshot: asString(data.positionSnapshot),
-    leaveTypeId: asString(data.leaveTypeId),
-    leaveTypeNameSnapshot: asString(data.leaveTypeNameSnapshot),
     balanceId: asString(data.balanceId),
     createdBy: asString(data.createdBy),
     createdByName: asString(data.createdByName),
@@ -141,8 +120,6 @@ export function toLeaveTransaction(id: string, data: DocumentData): LeaveTransac
     employeeNameSnapshot: strings.employeeNameSnapshot ?? '',
     positionSnapshot: strings.positionSnapshot ?? '',
     departmentSnapshot: asString(data.departmentSnapshot),
-    leaveTypeId: strings.leaveTypeId ?? '',
-    leaveTypeNameSnapshot: strings.leaveTypeNameSnapshot ?? '',
     leaveYear: numbers.leaveYear ?? 0,
     balanceId: strings.balanceId ?? '',
     transactionType: type,

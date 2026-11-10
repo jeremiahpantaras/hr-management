@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { allocationSchema } from '@/domain/schemas/allocation';
 import { changePasswordSchema, profileSchema } from '@/domain/schemas/auth';
-import { isDuplicateLeaveTypeName, leaveTypeSchema } from '@/domain/schemas/leaveType';
 import { reversalSchema } from '@/domain/schemas/reversal';
 import { usageSchema } from '@/domain/schemas/usage';
 
@@ -19,29 +18,26 @@ function messages(result: {
   return out;
 }
 
-const allocation = { employeeId: 'e', leaveTypeId: 't', year: '2026', days: '2', remarks: '' };
+const allocation = { employeeId: 'e', year: '2026', days: '2', remarks: '' };
 
 describe('allocationSchema (UI §12)', () => {
   it('parses strings to numbers and blank remarks to null', () => {
     const parsed = allocationSchema.parse(allocation);
     expect(parsed).toEqual({
       employeeId: 'e',
-      leaveTypeId: 't',
       year: 2026,
       days: 2,
       remarks: null,
     });
   });
-  it('requires employee, type and year', () => {
+  it('requires employee and year', () => {
     const result = allocationSchema.safeParse({
       ...allocation,
       employeeId: '',
-      leaveTypeId: '',
       year: '',
     });
     expect(messages(result)).toMatchObject({
       employeeId: 'Select an employee.',
-      leaveTypeId: 'Select a leave type.',
       year: 'Select a leave year.',
     });
   });
@@ -71,7 +67,6 @@ describe('allocationSchema (UI §12)', () => {
 
 const usage = {
   employeeId: 'e',
-  leaveTypeId: 't',
   year: '2026',
   dateFrom: '2026-02-10',
   dateTo: '2026-02-11',
@@ -149,32 +144,6 @@ describe('reversalSchema (TC-REV-05)', () => {
       reason: 'abc',
       thenReEnter: true,
     });
-  });
-});
-
-describe('leaveTypeSchema (FR-LT)', () => {
-  it('requires a name and bounds lengths', () => {
-    expect(messages(leaveTypeSchema.safeParse({ name: ' ', description: '' })).name).toBe(
-      'Enter a leave type name.',
-    );
-    expect(leaveTypeSchema.safeParse({ name: 'x'.repeat(61), description: '' }).success).toBe(
-      false,
-    );
-    expect(
-      messages(leaveTypeSchema.safeParse({ name: 'A', description: 'x'.repeat(201) })).description,
-    ).toBe('Description is too long (200 characters max).');
-  });
-  it('stores a blank description as null and trims', () => {
-    expect(leaveTypeSchema.parse({ name: '  Vacation Leave ', description: '  ' })).toEqual({
-      name: 'Vacation Leave',
-      description: null,
-    });
-  });
-  it('detects duplicate names case-insensitively, ignoring the type being edited (TC-LT-02)', () => {
-    const existing = [{ id: 'a', name: 'Vacation Leave' }];
-    expect(isDuplicateLeaveTypeName(' vacation leave ', existing)).toBe(true);
-    expect(isDuplicateLeaveTypeName('Sick Leave', existing)).toBe(false);
-    expect(isDuplicateLeaveTypeName('VACATION LEAVE', existing, 'a')).toBe(false);
   });
 });
 

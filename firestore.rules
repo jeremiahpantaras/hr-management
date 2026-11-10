@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // Collections: `users` (own-profile read, own display-name update), `employees` +
-// `employeeNumbers`, `leaveTypes`, and the ledger pair `leaveBalances` + `leaveTransactions`
+// `employeeNumbers`, and the ledger pair `leaveBalances` + `leaveTransactions`
 // (HR admin only; neither ledger document can be written without the other, in one commit).
 // Every other path stays denied by the final catch-all (planning/FIREBASE_SECURITY_PLAN.md §6).
 // Never deployed by the implementation phases — emulator only.
@@ -28,7 +28,6 @@ service cloud.firestore {
 
     function empPath(id)  { return /databases/$(database)/documents/employees/$(id); }
     function numPath(key) { return /databases/$(database)/documents/employeeNumbers/$(key); }
-    function typePath(id) { return /databases/$(database)/documents/leaveTypes/$(id); }
     function balPath(id)  { return /databases/$(database)/documents/leaveBalances/$(id); }
     function txnPath(id)  { return /databases/$(database)/documents/leaveTransactions/$(id); }
 
@@ -114,8 +113,13 @@ service cloud.firestore {
                 && getAfter(numPath(request.resource.data.employeeNumberKey)).data.employeeId == employeeId
                 && !existsAfter(numPath(resource.data.employeeNumberKey))));
 
-      // Employees are archived, never deleted (Confirmed).
-      allow delete: if false;
+      // Permanent deletion (added at the user's request; archiving remains the normal way to retire
+      // someone). The Employee-ID reservation MUST be deleted in the same commit, otherwise the ID
+      // would stay blocked forever. The rules cannot see an employee's leave history (they cannot
+      // query), so "no leave records" is enforced by the service before it deletes; see
+      // planning/IMPLEMENTATION_PROGRESS.md DEV-043.
+      allow delete: if isHrAdmin()
+        && !existsAfter(numPath(resource.data.employeeNumberKey));
     }
 
     // One document per Employee ID key (the upper-cased ID) — enforces uniqueness.
@@ -128,34 +132,11 @@ service cloud.firestore {
         && existsAfter(empPath(request.resource.data.employeeId))
         && getAfter(empPath(request.resource.data.employeeId)).data.employeeNumberKey == key;
       allow update: if false;
-      // Only releasable when the employee that held it moves to a different key in the same commit.
+      // Releasable only when the employee that held it moves to a different key in the same commit
+      // (Employee-ID change), or is deleted in the same commit (or is already gone).
       allow delete: if isHrAdmin()
-        && existsAfter(empPath(resource.data.employeeId))
-        && getAfter(empPath(resource.data.employeeId)).data.employeeNumberKey != key;
-    }
-
-    // ───────── leaveTypes (Security §6.3) ─────────
-    // Shape validation only. Name uniqueness is client-checked (A-05). Types are deactivated
-    // (`isActive: false`), never deleted.
-    function typeKeys() {
-      return ['name', 'description', 'isActive', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'];
-    }
-    function typeShapeOk(d) {
-      return exactKeys(d, typeKeys())
-        && isStr(d.name, 1, 60) && isTrimmed(d.name)
-        && (d.description == null || (isStr(d.description, 1, 200) && isTrimmed(d.description)))
-        && d.isActive is bool
-        && d.updatedAt == request.time && d.updatedBy == me();
-    }
-    match /leaveTypes/{leaveTypeId} {
-      allow get, list: if isHrAdmin();
-      allow create: if isHrAdmin() && typeShapeOk(request.resource.data)
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.createdBy == me();
-      allow update: if isHrAdmin() && typeShapeOk(request.resource.data)
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.createdBy == resource.data.createdBy;
-      allow delete: if false;
+        && (!existsAfter(empPath(resource.data.employeeId))
+            || getAfter(empPath(resource.data.employeeId)).data.employeeNumberKey != key);
     }
 
     // ───────── ledger helpers (shared by leaveBalances and leaveTransactions) ─────────
@@ -166,21 +147,20 @@ service cloud.firestore {
     // A balance can only be written in the same commit as a NEW ledger entry that points at it,
     // and only to totals that equal the stored totals plus that entry's deltas.
     function balKeys() {
-      return ['employeeId', 'leaveTypeId', 'year', 'totalCredits', 'totalUsed', 'availableCredits',
+      return ['employeeId', 'year', 'totalCredits', 'totalUsed', 'availableCredits',
               'lastTransactionId', 'createdAt', 'updatedAt'];
     }
     function balanceLinkedToNewLedger(balanceId, d) {
       return exactKeys(d, balKeys())
         && validYear(d.year)
-        && d.employeeId is string && d.leaveTypeId is string
-        && balanceId == d.employeeId + '_' + string(d.year) + '_' + d.leaveTypeId
+        && d.employeeId is string
+        && balanceId == d.employeeId + '_' + string(d.year)
         && d.lastTransactionId is string
         && d.lastTransactionId.matches('^(rev_)?[A-Za-z0-9]{20}$')
         && !exists(txnPath(d.lastTransactionId))          // the ledger entry is NEW in this commit
         && existsAfter(txnPath(d.lastTransactionId))      // …and is being written in this commit
         && ledgerAfter(d.lastTransactionId).balanceId == balanceId
         && ledgerAfter(d.lastTransactionId).employeeId == d.employeeId
-        && ledgerAfter(d.lastTransactionId).leaveTypeId == d.leaveTypeId
         && ledgerAfter(d.lastTransactionId).leaveYear == d.year
         && d.availableCredits == d.totalCredits - d.totalUsed
         && d.totalCredits >= 0 && d.totalUsed >= 0 && d.availableCredits >= 0
@@ -197,7 +177,6 @@ service cloud.firestore {
         && balanceLinkedToNewLedger(balanceId, request.resource.data)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.employeeId == resource.data.employeeId
-        && request.resource.data.leaveTypeId == resource.data.leaveTypeId
         && request.resource.data.year == resource.data.year
         && request.resource.data.totalCredits ==
              resource.data.totalCredits + ledgerAfter(request.resource.data.lastTransactionId).creditsDelta
@@ -209,20 +188,18 @@ service cloud.firestore {
     // ───────── leaveTransactions (Security §6.5) ─────────
     function ledgerKeys() {
       return ['employeeId', 'employeeNumberSnapshot', 'employeeNameSnapshot', 'positionSnapshot',
-              'departmentSnapshot', 'leaveTypeId', 'leaveTypeNameSnapshot', 'leaveYear', 'balanceId',
+              'departmentSnapshot', 'leaveYear', 'balanceId',
               'transactionType', 'days', 'creditsDelta', 'usedDelta', 'dateFrom', 'dateTo', 'remarks',
               'reversesTransactionId', 'reversesType', 'reversedByTransactionId',
               'resultingTotalCredits', 'resultingTotalUsed', 'createdBy', 'createdByName', 'createdAt'];
     }
-    // ALLOCATION / USAGE: snapshots must match current master data; employee active; type active.
+    // ALLOCATION / USAGE: snapshots must match current master data; the employee must be active.
     function masterDataOk(d) {
       return get(empPath(d.employeeId)).data.isArchived == false
-        && get(typePath(d.leaveTypeId)).data.isActive == true
         && d.employeeNumberSnapshot == get(empPath(d.employeeId)).data.employeeNumber
         && d.employeeNameSnapshot   == get(empPath(d.employeeId)).data.fullName
         && d.positionSnapshot       == get(empPath(d.employeeId)).data.position
-        && d.departmentSnapshot     == get(empPath(d.employeeId)).data.department
-        && d.leaveTypeNameSnapshot  == get(typePath(d.leaveTypeId)).data.name;
+        && d.departmentSnapshot     == get(empPath(d.employeeId)).data.department;
     }
     function allocationOk(d) {
       return d.creditsDelta == d.days && d.usedDelta == 0
@@ -250,7 +227,6 @@ service cloud.firestore {
         && d.reversesType == get(txnPath(d.reversesTransactionId)).data.transactionType
         && d.balanceId   == get(txnPath(d.reversesTransactionId)).data.balanceId
         && d.employeeId  == get(txnPath(d.reversesTransactionId)).data.employeeId
-        && d.leaveTypeId == get(txnPath(d.reversesTransactionId)).data.leaveTypeId
         && d.leaveYear   == get(txnPath(d.reversesTransactionId)).data.leaveYear
         && d.days        == get(txnPath(d.reversesTransactionId)).data.days
         && d.creditsDelta == -get(txnPath(d.reversesTransactionId)).data.creditsDelta
@@ -260,8 +236,7 @@ service cloud.firestore {
         && d.employeeNumberSnapshot == get(txnPath(d.reversesTransactionId)).data.employeeNumberSnapshot
         && d.employeeNameSnapshot   == get(txnPath(d.reversesTransactionId)).data.employeeNameSnapshot
         && d.positionSnapshot       == get(txnPath(d.reversesTransactionId)).data.positionSnapshot
-        && d.departmentSnapshot     == get(txnPath(d.reversesTransactionId)).data.departmentSnapshot
-        && d.leaveTypeNameSnapshot  == get(txnPath(d.reversesTransactionId)).data.leaveTypeNameSnapshot;
+        && d.departmentSnapshot     == get(txnPath(d.reversesTransactionId)).data.departmentSnapshot;
     }
     function ledgerCreateOk(txnId, d) {
       return exactKeys(d, ledgerKeys())
@@ -270,8 +245,8 @@ service cloud.firestore {
         && d.createdBy == me() && d.createdAt == request.time && d.createdByName == profile().fullName
         && validYear(d.leaveYear) && validDays(d.days)
         && (d.remarks == null || isStr(d.remarks, 1, 500))
-        && d.employeeId is string && d.leaveTypeId is string
-        && d.balanceId == d.employeeId + '_' + string(d.leaveYear) + '_' + d.leaveTypeId
+        && d.employeeId is string
+        && d.balanceId == d.employeeId + '_' + string(d.leaveYear)
         && d.reversedByTransactionId == null
         // ── atomic pairing with the balance ──
         && existsAfter(balPath(d.balanceId))

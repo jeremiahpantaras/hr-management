@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DEFAULT_EMPLOYEE_PAGE_SIZE, EMPLOYMENT_STATUSES } from '@/domain/constants';
 import {
   DEFAULT_SORT,
@@ -29,6 +30,7 @@ import {
   type EmployeeSortKey,
 } from '@/domain/employeeList';
 import { appErrorMessage, errorCodeLabel } from '@/domain/errors';
+import { EmployeeBulkBar } from '@/features/employees/EmployeeBulkBar';
 import { EmployeeActionsMenu } from '@/features/employees/EmployeeActionsMenu';
 import { EmployeeExportDialog } from '@/features/employees/EmployeeExportDialog';
 import { EmployeeFormDialog } from '@/features/employees/EmployeeFormDialog';
@@ -41,6 +43,7 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { Employee } from '@/types/models';
 
+const EMPTY_SELECTION: ReadonlySet<string> = new Set();
 const STATUS_OPTIONS = EMPLOYMENT_STATUSES.map((status) => ({ value: status, label: status }));
 const ARCHIVE_OPTIONS = [
   { value: 'active', label: 'Active' },
@@ -113,6 +116,40 @@ export function EmployeesPage() {
     [all, query, status, archiveFilter, sort],
   );
   const page = paginate(filtered, requestedPage, pageSize);
+  // ── selection (checkboxes). It belongs to the current search/filters: changing them clears it, so
+  // nothing is ever selected out of sight.
+  const filterKey = `${query}|${status}|${archiveFilter}`;
+  const [selection, setSelection] = useState<{ key: string; ids: ReadonlySet<string> }>({
+    key: filterKey,
+    ids: new Set(),
+  });
+  if (selection.key !== filterKey) {
+    // The filters changed: drop the old selection for good (not just hide it — going back to the
+    // previous filters must not bring it back).
+    setSelection({ key: filterKey, ids: EMPTY_SELECTION });
+  }
+  const selectedIds = selection.key === filterKey ? selection.ids : EMPTY_SELECTION;
+  function updateSelection(next: ReadonlySet<string>): void {
+    setSelection({ key: filterKey, ids: next });
+  }
+
+  const pageIds = page.items.map((e) => e.id);
+  const selectedOnPage = pageIds.filter((id) => selectedIds.has(id)).length;
+  const selectedEmployees = filtered.filter((e) => selectedIds.has(e.id));
+  function toggleOne(id: string, checked: boolean): void {
+    const next = new Set(selectedIds);
+    if (checked) next.add(id);
+    else next.delete(id);
+    updateSelection(next);
+  }
+  function togglePage(checked: boolean): void {
+    const next = new Set(selectedIds);
+    for (const id of pageIds) {
+      if (checked) next.add(id);
+      else next.delete(id);
+    }
+    updateSelection(next);
+  }
   const hasFilters = query !== '' || status !== '' || archiveFilter !== 'active';
 
   function clearFilters(): void {
@@ -130,6 +167,7 @@ export function EmployeesPage() {
     setFormOpen(true);
   }
   const [archiveTarget, setArchiveTarget] = useState<Employee | null>(null);
+
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const everyone = useMemo(() => sortEmployees(all ?? [], DEFAULT_SORT), [all]);
@@ -158,6 +196,35 @@ export function EmployeesPage() {
 
   // ── table ──────────────────────────────────────────────────────────────────────────────────
   const columns: readonly DataTableColumn<Employee>[] = [
+    {
+      id: 'select',
+      header: (
+        <Checkbox
+          aria-label="Select all on this page"
+          checked={
+            pageIds.length > 0 && selectedOnPage === pageIds.length
+              ? true
+              : selectedOnPage > 0
+                ? 'indeterminate'
+                : false
+          }
+          disabled={pageIds.length === 0}
+          onCheckedChange={(checked) => {
+            togglePage(checked === true);
+          }}
+        />
+      ),
+      cell: (e) => (
+        <Checkbox
+          aria-label={`Select ${e.fullName}`}
+          checked={selectedIds.has(e.id)}
+          onCheckedChange={(checked) => {
+            toggleOne(e.id, checked === true);
+          }}
+        />
+      ),
+      className: 'w-10',
+    },
     { id: 'employeeNumber', header: 'Employee ID', cell: (e) => e.employeeNumber, sortable: true },
     {
       id: 'fullName',
@@ -180,7 +247,7 @@ export function EmployeesPage() {
       sortable: true,
       priority: 'low',
     },
-    { id: 'department', header: 'Department', cell: (e) => e.department ?? '—', priority: 'low' },
+    { id: 'department', header: 'Location', cell: (e) => e.department ?? '—', priority: 'low' },
     {
       id: 'status',
       header: 'Employment status',
@@ -330,6 +397,24 @@ export function EmployeesPage() {
         </p>
       </div>
 
+      {selectedEmployees.length > 0 ? (
+        <EmployeeBulkBar
+          selected={selectedEmployees}
+          matchingCount={filtered.length}
+          allMatchingSelected={selectedEmployees.length === filtered.length}
+          onSelectAllMatching={() => {
+            updateSelection(new Set(filtered.map((e) => e.id)));
+          }}
+          onClear={() => {
+            updateSelection(new Set());
+          }}
+          onDone={(finishedIds) => {
+            const next = new Set(selectedIds);
+            for (const id of finishedIds) next.delete(id);
+            updateSelection(next);
+          }}
+        />
+      ) : null}
       <DataTable
         caption="Employees"
         columns={columns}

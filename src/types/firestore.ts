@@ -39,19 +39,8 @@ export interface EmployeeNumberDoc {
   createdAt: Timestamp;
 }
 
-export interface LeaveTypeDoc {
-  name: string;
-  description: string | null;
-  isActive: boolean;
-  createdAt: Timestamp;
-  createdBy: string;
-  updatedAt: Timestamp;
-  updatedBy: string;
-}
-
 export interface LeaveBalanceDoc {
   employeeId: string;
-  leaveTypeId: string;
   /** Stored as an integer — the rules build the document id with `string(year)`. */
   year: number;
   totalCredits: number;
@@ -68,8 +57,6 @@ export interface LeaveTransactionDoc {
   employeeNameSnapshot: string;
   positionSnapshot: string;
   departmentSnapshot: string | null;
-  leaveTypeId: string;
-  leaveTypeNameSnapshot: string;
   leaveYear: number;
   balanceId: string;
   transactionType: TransactionType;

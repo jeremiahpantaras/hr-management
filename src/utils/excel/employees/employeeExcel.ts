@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { EMPLOYMENT_STATUSES } from '@/domain/constants';
 import { IMPORT_COLUMNS, MAX_IMPORT_ROWS } from '@/domain/employeeImport';
 import type { Employee } from '@/types/models';
+import { downloadBytes } from '@/utils/excel/download';
 import {
   PAPER_LABELS,
   applyPrintLayout,
@@ -93,7 +94,7 @@ const INSTRUCTIONS = [
   ],
   ['3. Complete Name (required): up to 120 characters.'],
   ['4. Position (required): up to 80 characters.'],
-  ['5. Department (optional): up to 80 characters.'],
+  ['5. Location (optional): up to 80 characters.'],
   [`6. Employment Status (required): one of ${EMPLOYMENT_STATUSES.join(', ')}.`],
   [
     `7. At most ${String(MAX_IMPORT_ROWS)} employees per file. Rows that have a problem are shown before anything is imported, and are skipped.`,
@@ -162,24 +163,6 @@ export function exportFileName(options: ExportOptions, generatedAt: Date): strin
 
 export function templateFileName(paper: PaperSize): string {
   return `Employee-import-template_${PAPER_LABELS[paper]}.xlsx`;
-}
-
-/** Hands bytes to the browser as a download. */
-export function downloadBytes(fileName: string, bytes: Uint8Array): void {
-  const url = URL.createObjectURL(
-    new Blob([bytes as BlobPart], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    }),
-  );
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 10_000);
 }
 
 export function downloadEmployees(employees: readonly Employee[], options: ExportOptions): string {

@@ -7,23 +7,20 @@ import { lowBalances } from '@/domain/summary';
 import { useYearBalances } from '@/features/leave-credits/hooks/useBalances';
 import { WidgetCard } from '@/features/dashboard/widgets/WidgetCard';
 import { useEmployees } from '@/features/employees/hooks/useEmployees';
-import { useLeaveTypes } from '@/features/leave-types/hooks/useLeaveTypes';
 
 const SHOWN = 10;
 
 /**
- * Low & depleted balances (UI spec §6.4, Q-04): per employee × leave type, available ≤ threshold.
+ * Low & depleted balances (UI spec §6.4, Q-04): per employee, available ≤ threshold.
  * Computed from the year's balances; archived employees and zero-credit balances are filtered out.
  */
 export function LowBalances({ year }: { readonly year: number }) {
   const candidates = useYearBalances(year);
   const employees = useEmployees();
-  const types = useLeaveTypes();
 
   const activeIds = new Set((employees.data ?? []).filter((e) => !e.isArchived).map((e) => e.id));
   const rows = lowBalances(candidates.data ?? [], activeIds).slice(0, SHOWN);
   const employeeName = (id: string) => employees.data?.find((e) => e.id === id)?.fullName ?? id;
-  const typeName = (id: string) => types.data?.find((t) => t.id === id)?.name ?? id;
 
   return (
     <WidgetCard
@@ -47,8 +44,7 @@ export function LowBalances({ year }: { readonly year: number }) {
                 to={`/employees/${balance.employeeId}?year=${String(year)}`}
                 className="min-w-0 truncate font-medium text-fg hover:text-primary hover:underline"
               >
-                {employeeName(balance.employeeId)}{' '}
-                <span className="font-normal text-fg-muted">· {typeName(balance.leaveTypeId)}</span>
+                {employeeName(balance.employeeId)}
               </Link>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="text-fg-muted tabular-nums">

@@ -13,13 +13,11 @@ import { EmployeesPage } from '@/features/employees/EmployeesPage';
 import * as service from '@/services/employees.service';
 import * as balancesService from '@/services/leaveBalances.service';
 import * as ledgerService from '@/services/leaveLedger.service';
-import * as typesService from '@/services/leaveTypes.service';
 import type { Employee } from '@/types/models';
 
 vi.mock('@/services/employees.service');
 vi.mock('@/services/leaveBalances.service');
 vi.mock('@/services/leaveLedger.service');
-vi.mock('@/services/leaveTypes.service');
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const NOW = new Date('2026-02-10T08:00:00Z');
@@ -108,7 +106,6 @@ beforeEach(() => {
   vi.mocked(service.updateEmployee).mockResolvedValue(undefined);
   vi.mocked(service.archiveEmployee).mockResolvedValue(undefined);
   vi.mocked(service.restoreEmployee).mockResolvedValue(undefined);
-  vi.mocked(typesService.listLeaveTypes).mockResolvedValue([]);
   vi.mocked(balancesService.getBalancesForEmployeeYear).mockResolvedValue([]);
   vi.mocked(ledgerService.listLedgerPage).mockResolvedValue({
     items: [],
@@ -129,7 +126,7 @@ describe('directory: list, states, filters (TC-EMP-08/09/10/16)', () => {
       'Employee ID',
       'Complete name',
       'Position',
-      'Department',
+      'Location',
       'Employment status',
     ]) {
       expect(screen.getByRole('columnheader', { name: header })).toBeInTheDocument();
@@ -346,7 +343,7 @@ describe('add employee (TC-EMP-01, 03, 14)', () => {
     for (const label of ['Employee ID', 'Complete name', 'Position', 'Employment status']) {
       expect(within(dialog).getByLabelText(new RegExp(label))).toBeRequired();
     }
-    expect(within(dialog).getByLabelText('Department')).not.toBeRequired();
+    expect(within(dialog).getByLabelText('Location')).not.toBeRequired();
     expect(within(dialog).getByLabelText(/Employee ID/)).toHaveValue('');
     expect(within(dialog).queryByText(/Created .* Updated/)).toBeNull();
   });
@@ -532,7 +529,7 @@ describe('edit employee (TC-EMP-04, 05, 06)', () => {
     expect(within(dialog).getByLabelText(/Employee ID/)).toHaveValue('EMP-0042');
     expect(within(dialog).getByLabelText(/Complete name/)).toHaveValue('Juan Dela Cruz');
     expect(within(dialog).getByLabelText(/Position/)).toHaveValue('Accounting Staff');
-    expect(within(dialog).getByLabelText('Department')).toHaveValue('Finance');
+    expect(within(dialog).getByLabelText('Location')).toHaveValue('Finance');
     expect(within(dialog).getByRole('combobox', { name: /Employment status/ })).toHaveTextContent(
       'Regular',
     );
@@ -544,7 +541,7 @@ describe('edit employee (TC-EMP-04, 05, 06)', () => {
     const position = within(dialog).getByLabelText(/Position/);
     await userEvent.clear(position);
     await userEvent.type(position, 'Senior Accountant');
-    await userEvent.clear(within(dialog).getByLabelText('Department'));
+    await userEvent.clear(within(dialog).getByLabelText('Location'));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save employee' }));
 
     await waitFor(() => {
@@ -651,7 +648,7 @@ describe('archive and restore (TC-EMP-07, 11, 12)', () => {
     expect(toast.success).toHaveBeenCalledWith('Restored Mario Santos.');
   });
 
-  it('TC-EMP-11: there is no delete control anywhere', async () => {
+  it('TC-EMP-11 (revised): nothing offers delete until employees are selected — and never in the row menu', async () => {
     renderAt('/employees?archived=all');
     await screen.findByText('Mario Santos');
     expect(screen.queryByRole('button', { name: /delete|remove/i })).toBeNull();

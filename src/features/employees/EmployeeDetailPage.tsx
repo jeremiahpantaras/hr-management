@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 
-import { LeaveBreakdownTable } from '@/components/data/LeaveBreakdownTable';
+import { ProgressBar } from '@/components/data/ProgressBar';
 import { StatCard } from '@/components/data/StatCard';
 import { StatusBadge } from '@/components/data/StatusBadge';
 import { YearSelect } from '@/components/data/YearSelect';
@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDays } from '@/domain/days';
 import { appErrorMessage, errorCodeLabel } from '@/domain/errors';
-import { summarizeBalances } from '@/domain/summary';
+import { sumTotals } from '@/domain/summary';
 import { EmployeeFormDialog } from '@/features/employees/EmployeeFormDialog';
 import {
   useArchiveEmployee,
@@ -28,7 +28,6 @@ import {
 import { AllocationDialog } from '@/features/leave-credits/AllocationDialog';
 import { useEmployeeYearBalances } from '@/features/leave-credits/hooks/useBalances';
 import { LedgerList } from '@/features/leave-history/LedgerList';
-import { useLeaveTypes } from '@/features/leave-types/hooks/useLeaveTypes';
 import { RecordUsageDialog } from '@/features/leave-usage/RecordUsageDialog';
 import { useReplacementFlow } from '@/features/leave-usage/useReplacementFlow';
 import { useYearParam } from '@/hooks/useYearParam';
@@ -36,7 +35,7 @@ import { formatTimestamp } from '@/utils/format';
 
 /**
  * Employee details and yearly leave summary (UI spec §6.6, FR-EMP-06, FR-SUM-01…06). Figures come
- * from the single `summarizeBalances` function, so they match the dashboard and the Excel export.
+ * from the single `sumTotals` function, so they match the dashboard and the Excel export.
  */
 export function EmployeeDetailPage() {
   const { employeeId = '' } = useParams();
@@ -44,11 +43,7 @@ export function EmployeeDetailPage() {
   const { data: employee, isPending, error, refetch } = useEmployee(employeeId);
 
   const balances = useEmployeeYearBalances(employeeId, year);
-  const leaveTypes = useLeaveTypes();
-  const summary = useMemo(
-    () => summarizeBalances(balances.data ?? [], leaveTypes.data ?? []),
-    [balances.data, leaveTypes.data],
-  );
+  const totals = useMemo(() => sumTotals(balances.data ?? []), [balances.data]);
 
   const archive = useArchiveEmployee();
   const restore = useRestoreEmployee();
@@ -80,12 +75,8 @@ export function EmployeeDetailPage() {
     });
   }
 
-  const summaryLoading = balances.isPending || leaveTypes.isPending;
-  const summaryError = balances.isError
-    ? balances.error
-    : leaveTypes.isError
-      ? leaveTypes.error
-      : null;
+  const summaryLoading = balances.isPending;
+  const summaryError = balances.isError ? balances.error : null;
   const archived = employee?.isArchived === true;
 
   return (
@@ -153,7 +144,7 @@ export function EmployeeDetailPage() {
                       <dd className="font-medium text-fg">{employee.position}</dd>
                     </div>
                     <div className="flex gap-2">
-                      <dt className="text-fg-muted">Department</dt>
+                      <dt className="text-fg-muted">Location</dt>
                       <dd className="font-medium text-fg">{employee.department ?? '—'}</dd>
                     </div>
                     <div className="flex items-center gap-2">
@@ -231,7 +222,6 @@ export function EmployeeDetailPage() {
                   message={appErrorMessage(summaryError)}
                   onRetry={() => {
                     void balances.refetch();
-                    void leaveTypes.refetch();
                   }}
                 />
               </Card>
@@ -240,19 +230,19 @@ export function EmployeeDetailPage() {
                 <div className="grid gap-4 sm:grid-cols-3">
                   <StatCard
                     label="Total Credits"
-                    value={formatDays(summary.totals.totalCredits)}
+                    value={formatDays(totals.totalCredits)}
                     caption={String(year)}
                     loading={summaryLoading}
                   />
                   <StatCard
                     label="Total Used"
-                    value={formatDays(summary.totals.totalUsed)}
+                    value={formatDays(totals.totalUsed)}
                     caption={String(year)}
                     loading={summaryLoading}
                   />
                   <StatCard
                     label="Total Unused"
-                    value={formatDays(summary.totals.totalUnused)}
+                    value={formatDays(totals.totalUnused)}
                     caption={String(year)}
                     loading={summaryLoading}
                   />
@@ -262,25 +252,16 @@ export function EmployeeDetailPage() {
                     No credits have been allocated to this employee for {year}.
                   </p>
                 ) : null}
-                {summaryLoading ? null : (
-                  <Card>
-                    <LeaveBreakdownTable
-                      caption={`${employee.fullName} — ${String(year)} leave breakdown`}
-                      totals={{
-                        total: summary.totals.totalCredits,
-                        used: summary.totals.totalUsed,
-                        unused: summary.totals.totalUnused,
-                      }}
-                      rows={summary.rows.map((row) => ({
-                        id: row.leaveTypeId,
-                        leaveTypeName: row.leaveTypeName,
-                        total: row.totalCredits,
-                        used: row.totalUsed,
-                        unused: row.totalUnused,
-                        inactive: !row.isActive,
-                        hasBalance: row.hasBalance,
-                      }))}
+                {summaryLoading || totals.totalCredits === 0 ? null : (
+                  <Card className="p-4">
+                    <ProgressBar
+                      value={totals.totalUsed}
+                      max={totals.totalCredits}
+                      label={`${employee.fullName} — ${String(year)} credits used`}
                     />
+                    <p className="mt-2 text-caption text-fg-muted tabular-nums">
+                      {formatDays(totals.totalUsed)} used of {formatDays(totals.totalCredits)}
+                    </p>
                   </Card>
                 )}
               </>

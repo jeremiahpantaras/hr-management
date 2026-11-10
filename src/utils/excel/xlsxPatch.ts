@@ -46,7 +46,7 @@ export function footerCode(layout: PrintLayout): string {
   return `&amp;L&amp;8${clean(layout.footerLeft)}&amp;C&amp;8Page &amp;P of &amp;N&amp;R&amp;8${clean(layout.footerRight)}`;
 }
 
-function bumpCount(xml: string, tag: string, add: string, extra: number): string {
+export function bumpCount(xml: string, tag: string, add: string, extra: number): string {
   const open = new RegExp(`<${tag} count="(\\d+)"([^>]*)>`);
   const match = open.exec(xml);
   if (!match) throw new Error(`styles.xml has no <${tag}>`);

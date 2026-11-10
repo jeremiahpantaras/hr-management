@@ -351,11 +351,24 @@ describe('TC-EMP-07: archive and restore', () => {
   });
 });
 
-describe('no deletion anywhere (FR-EMP-09)', () => {
-  it('the service exposes no delete operation', () => {
-    expect(Object.keys(employees).filter((name) => /delete|remove|destroy/i.test(name))).toEqual(
-      [],
-    );
+describe('deletion is guarded (FR-EMP-09, revised — see DEV-043)', () => {
+  it('the only delete operations are the guarded ones', () => {
+    expect(
+      Object.keys(employees)
+        .filter((name) => /delete|remove|destroy/i.test(name))
+        .sort(),
+    ).toEqual(['deleteEmployee', 'deleteEmployeesBulk']);
+  });
+
+  it('a raw client delete of an employee alone (leaving its ID reservation) is refused by the rules', async () => {
+    const id = await employees.createEmployee(juan, hrUid);
+    const { db } = firebase.getFirebase();
+    const { deleteDoc, doc } = await import('firebase/firestore');
+    expect(
+      ((await errorOf(deleteDoc(doc(db, 'employees', id)))) as { code?: string } | null)?.code,
+    ).toBe('permission-denied');
+    expect(await raw('employees', id)).not.toBeNull();
+    expect(await raw('employeeNumbers', 'EMP-0042')).not.toBeNull();
   });
 });
 

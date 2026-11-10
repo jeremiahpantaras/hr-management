@@ -27,7 +27,7 @@ export const employeeSchema = z.object({
   department: z
     .string()
     .trim()
-    .max(EMPLOYEE_FIELD_LIMITS.department, 'Department is too long (80 characters max).')
+    .max(EMPLOYEE_FIELD_LIMITS.department, 'Location is too long (80 characters max).')
     .transform((value) => (value === '' ? null : value)),
   employmentStatus: z.enum(EMPLOYMENT_STATUSES, { error: 'Select an employment status.' }),
 });

@@ -25,8 +25,7 @@ export function RecentTransactions({ year }: { readonly year: number }) {
               <span className="flex min-w-0 flex-col">
                 <span className="truncate font-medium text-fg">{entry.employeeNameSnapshot}</span>
                 <span className="truncate text-caption text-fg-muted">
-                  {entry.leaveTypeNameSnapshot}
-                  {entry.createdAt ? ` · ${formatTimestamp(entry.createdAt)}` : ''}
+                  {entry.createdAt ? formatTimestamp(entry.createdAt) : ''}
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2">

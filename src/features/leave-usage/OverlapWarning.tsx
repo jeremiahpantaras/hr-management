@@ -30,8 +30,7 @@ export function OverlapWarning({ overlaps, confirmed, onConfirmedChange }: Overl
         {overlaps.map((entry) => (
           <li key={entry.id} className="list-disc">
             {entry.dateFrom && entry.dateTo ? formatDateRange(entry.dateFrom, entry.dateTo) : ''} ·{' '}
-            {formatDays(entry.days)} {entry.days === 1 ? 'day' : 'days'} ·{' '}
-            {entry.leaveTypeNameSnapshot}
+            {formatDays(entry.days)} {entry.days === 1 ? 'day' : 'days'}
           </li>
         ))}
       </ul>

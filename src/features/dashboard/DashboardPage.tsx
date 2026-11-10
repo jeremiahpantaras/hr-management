@@ -15,7 +15,6 @@ import { LowBalances } from '@/features/dashboard/widgets/LowBalances';
 import { RecentAllocations } from '@/features/dashboard/widgets/RecentAllocations';
 import { RecentTransactions } from '@/features/dashboard/widgets/RecentTransactions';
 import { StatCards } from '@/features/dashboard/widgets/StatCards';
-import { UsageByType } from '@/features/dashboard/widgets/UsageByType';
 import { employeeKeys } from '@/features/employees/hooks/useEmployees';
 import { AllocationDialog } from '@/features/leave-credits/AllocationDialog';
 import { balanceKeys, useYearBalances } from '@/features/leave-credits/hooks/useBalances';
@@ -77,13 +76,10 @@ export function DashboardPage() {
         ) : null}
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <UsageByType year={year} />
           <LowBalances year={year} />
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <RecentTransactions year={year} />
           <RecentAllocations year={year} />
         </div>
+        <RecentTransactions year={year} />
         <BalanceOverview year={year} />
       </div>
 

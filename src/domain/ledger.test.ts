@@ -11,7 +11,7 @@ import {
   makeBalanceId,
   makeReversalId,
 } from '@/domain/ledger';
-import { ACTOR, SICK, VACATION, juan2026, makeEmployee, makeType } from '@/domain/testFixtures';
+import { ACTOR, juan2026, makeEmployee } from '@/domain/testFixtures';
 
 const employee = makeEmployee();
 const errorCode = (fn: () => unknown): string | undefined => {
@@ -25,7 +25,7 @@ const errorCode = (fn: () => unknown): string | undefined => {
 
 describe('ids', () => {
   it('builds deterministic balance and reversal ids', () => {
-    expect(makeBalanceId('e1', 2026, 't1')).toBe('e1_2026_t1');
+    expect(makeBalanceId('e1', 2026)).toBe('e1_2026');
     expect(makeReversalId('abc')).toBe('rev_abc');
     expect(isReversalId('rev_abc')).toBe(true);
     expect(isReversalId('abc')).toBe(false);
@@ -54,7 +54,7 @@ describe('entryEffect — the sign matrix (DB §3.6)', () => {
 });
 
 describe('buildAllocationEntry (BR-CR-*)', () => {
-  const base = { employee, leaveType: VACATION, year: 2026, balance: null, actor: ACTOR };
+  const base = { employee, year: 2026, balance: null, actor: ACTOR };
 
   it('creates the first balance (TC-CR-01)', () => {
     const { entry, balance } = buildAllocationEntry({ ...base, days: 10 });
@@ -70,19 +70,18 @@ describe('buildAllocationEntry (BR-CR-*)', () => {
       reversedByTransactionId: null,
       resultingTotalCredits: 10,
       resultingTotalUsed: 0,
-      balanceId: 'emp1_2026_vac',
+      balanceId: 'emp1_2026',
       createdBy: 'uHr',
       createdByName: 'Maria Santos',
     });
   });
-  it('snapshots the employee and the leave type', () => {
+  it('snapshots the employee', () => {
     const { entry } = buildAllocationEntry({ ...base, days: 1 });
     expect(entry).toMatchObject({
       employeeNumberSnapshot: 'EMP-0042',
       employeeNameSnapshot: 'Juan Dela Cruz',
       positionSnapshot: 'Accounting Staff',
       departmentSnapshot: 'Finance',
-      leaveTypeNameSnapshot: 'Vacation Leave',
     });
   });
   it('adds a second allocation on top of the first (TC-CR-02: 10 then 2 → 12)', () => {
@@ -95,7 +94,7 @@ describe('buildAllocationEntry (BR-CR-*)', () => {
   });
   it('allows a future year (TC-CR-08)', () => {
     expect(buildAllocationEntry({ ...base, year: 2027, days: 1 }).entry.balanceId).toBe(
-      'emp1_2027_vac',
+      'emp1_2027',
     );
   });
   it.each([0, -1, 0.3, 1.25, 366])('rejects %s days (TC-CR-04)', (days) => {
@@ -110,13 +109,6 @@ describe('buildAllocationEntry (BR-CR-*)', () => {
         buildAllocationEntry({ ...base, days: 1, employee: makeEmployee({ isArchived: true }) }),
       ),
     ).toBe('EMPLOYEE_ARCHIVED');
-  });
-  it('rejects an inactive leave type (TC-CR-07)', () => {
-    expect(
-      errorCode(() =>
-        buildAllocationEntry({ ...base, days: 1, leaveType: makeType('x', 'Old', false) }),
-      ),
-    ).toBe('LEAVE_TYPE_INACTIVE');
   });
   it('rejects a year outside 2000–2100 and a non-integer year', () => {
     expect(errorCode(() => buildAllocationEntry({ ...base, days: 1, year: 1999 }))).toBe(
@@ -145,7 +137,6 @@ describe('buildUsageEntry (BR-LU-*, BR-INS-*)', () => {
   const balance = { totalCredits: 10, totalUsed: 3 };
   const base = {
     employee,
-    leaveType: VACATION,
     year: 2026,
     days: 2,
     dateFrom: '2026-02-10',
@@ -261,13 +252,10 @@ describe('buildUsageEntry (BR-LU-*, BR-INS-*)', () => {
         .dateTo,
     ).toBe('2026-12-31');
   });
-  it('rejects an archived employee or inactive type (TC-LU-11)', () => {
+  it('rejects an archived employee (TC-LU-11)', () => {
     expect(
       errorCode(() => buildUsageEntry({ ...base, employee: makeEmployee({ isArchived: true }) })),
     ).toBe('EMPLOYEE_ARCHIVED');
-    expect(
-      errorCode(() => buildUsageEntry({ ...base, leaveType: makeType('v', 'V', false) })),
-    ).toBe('LEAVE_TYPE_INACTIVE');
   });
   it('stores the dates exactly as entered (BR-LU-11)', () => {
     const { entry } = buildUsageEntry(base);
@@ -278,7 +266,7 @@ describe('buildUsageEntry (BR-LU-*, BR-INS-*)', () => {
 describe('buildReversalEntry (BR-COR-*, TC-REV-*)', () => {
   const { ledger } = juan2026();
   const usage = ledger.find((e) => e.dateFrom === '2026-04-20')!;
-  const vacationAllocation = ledger[0]!;
+  const allocation = ledger[0]!;
 
   it('mirrors every field of a usage with opposite deltas (TC-REV-01, TC-REV-11)', () => {
     const { entry, balance, reversalId } = buildReversalEntry({
@@ -301,8 +289,6 @@ describe('buildReversalEntry (BR-COR-*, TC-REV-*)', () => {
       employeeNameSnapshot: usage.employeeNameSnapshot,
       positionSnapshot: usage.positionSnapshot,
       departmentSnapshot: usage.departmentSnapshot,
-      leaveTypeId: usage.leaveTypeId,
-      leaveTypeNameSnapshot: usage.leaveTypeNameSnapshot,
       leaveYear: usage.leaveYear,
       balanceId: usage.balanceId,
       reversesTransactionId: usage.id,
@@ -315,7 +301,7 @@ describe('buildReversalEntry (BR-COR-*, TC-REV-*)', () => {
   });
   it('reverses an unused allocation of 2 (TC-REV-02: 12/3 → 10/3)', () => {
     const { balance } = buildReversalEntry({
-      original: { ...vacationAllocation, days: 2, creditsDelta: 2 },
+      original: { ...allocation, days: 2, creditsDelta: 2 },
       balance: { totalCredits: 12, totalUsed: 3 },
       reason: 'Entered twice',
       actor: ACTOR,
@@ -325,7 +311,7 @@ describe('buildReversalEntry (BR-COR-*, TC-REV-*)', () => {
   it('blocks reversing an allocation whose credits are partly used (TC-REV-03)', () => {
     try {
       buildReversalEntry({
-        original: vacationAllocation,
+        original: allocation,
         balance: { totalCredits: 10, totalUsed: 8 },
         reason: 'Wrong amount',
         actor: ACTOR,
@@ -338,7 +324,7 @@ describe('buildReversalEntry (BR-COR-*, TC-REV-*)', () => {
   });
   it('allows reversing an allocation exactly when nothing is used (EC-20)', () => {
     const { balance } = buildReversalEntry({
-      original: vacationAllocation,
+      original: allocation,
       balance: { totalCredits: 10, totalUsed: 0 },
       reason: 'Wrong employee',
       actor: ACTOR,
@@ -384,7 +370,7 @@ describe('buildReversalEntry (BR-COR-*, TC-REV-*)', () => {
       ).toBe('VALIDATION');
     },
   );
-  it('is allowed for an archived employee / inactive type — it takes no employee or type input (TC-REV-06)', () => {
+  it('is allowed for an archived employee — it takes no employee input (TC-REV-06)', () => {
     expect(
       buildReversalEntry({
         original: usage,
@@ -404,13 +390,14 @@ describe('buildReversalEntry (BR-COR-*, TC-REV-*)', () => {
 });
 
 describe('the Juan-2026 dataset replayed through the builders', () => {
-  it('produces ledger entries whose resulting totals follow each balance', () => {
+  it('produces ledger entries whose resulting totals follow the balance', () => {
     const { ledger } = juan2026();
-    const sick = ledger.filter((e) => e.leaveTypeId === SICK.id);
-    expect(sick.map((e) => [e.resultingTotalCredits, e.resultingTotalUsed])).toEqual([
-      [5, 0],
-      [5, 1],
-      [5, 2],
+    expect(ledger.map((e) => [e.resultingTotalCredits, e.resultingTotalUsed])).toEqual([
+      [10, 0],
+      [10, 2],
+      [10, 3],
+      [10, 4],
+      [10, 5],
     ]);
   });
 });

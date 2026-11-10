@@ -12,13 +12,11 @@ import { LeaveCreditsPage } from '@/features/leave-credits/LeaveCreditsPage';
 import * as employeesService from '@/services/employees.service';
 import * as balancesService from '@/services/leaveBalances.service';
 import * as ledgerService from '@/services/leaveLedger.service';
-import * as typesService from '@/services/leaveTypes.service';
-import type { Employee, LeaveBalance, LeaveTransaction, LeaveType } from '@/types/models';
+import type { Employee, LeaveBalance, LeaveTransaction } from '@/types/models';
 
 vi.mock('@/services/employees.service');
 vi.mock('@/services/leaveBalances.service');
 vi.mock('@/services/leaveLedger.service');
-vi.mock('@/services/leaveTypes.service');
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const YEAR = new Date().getFullYear();
@@ -48,29 +46,10 @@ function employee(
     ...over,
   };
 }
-function type(id: string, name: string, isActive = true): LeaveType {
+function balance(employeeId: string, credits: number, used: number, year = YEAR): LeaveBalance {
   return {
-    id,
-    name,
-    description: null,
-    isActive,
-    createdAt: null,
-    createdBy: 'hr1',
-    updatedAt: null,
-    updatedBy: 'hr1',
-  };
-}
-function balance(
-  employeeId: string,
-  typeId: string,
-  credits: number,
-  used: number,
-  year = YEAR,
-): LeaveBalance {
-  return {
-    id: `${employeeId}_${String(year)}_${typeId}`,
+    id: `${employeeId}_${String(year)}`,
     employeeId,
-    leaveTypeId: typeId,
     year,
     totalCredits: credits,
     totalUsed: used,
@@ -88,10 +67,8 @@ function entry(id: string, over: Partial<LeaveTransaction> = {}): LeaveTransacti
     employeeNameSnapshot: 'Juan Dela Cruz',
     positionSnapshot: 'Staff',
     departmentSnapshot: null,
-    leaveTypeId: 'vac',
-    leaveTypeNameSnapshot: 'Vacation Leave',
     leaveYear: YEAR,
-    balanceId: `juan_${String(YEAR)}_vac`,
+    balanceId: `juan_${String(YEAR)}`,
     transactionType: 'ALLOCATION',
     days: 10,
     creditsDelta: 10,
@@ -114,9 +91,6 @@ function entry(id: string, over: Partial<LeaveTransaction> = {}): LeaveTransacti
 const juan = employee('juan', 'Juan Dela Cruz', 'EMP-0042');
 const ana = employee('ana', 'Ana Reyes', 'EMP-0043');
 const mario = employee('mario', 'Mario Santos', 'EMP-0100', { isArchived: true });
-const vac = type('vac', 'Vacation Leave');
-const sick = type('sick', 'Sick Leave');
-const old = type('old', 'Old Leave', false);
 
 let client: QueryClient;
 function renderPage(path = '/leave-credits') {
@@ -141,11 +115,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   idCounter = 0;
   vi.mocked(employeesService.listEmployees).mockResolvedValue([juan, ana, mario]);
-  vi.mocked(typesService.listLeaveTypes).mockResolvedValue([old, sick, vac]);
-  vi.mocked(balancesService.getBalancesForEmployees).mockResolvedValue([
-    balance('juan', 'vac', 10, 3),
-    balance('juan', 'sick', 5, 2),
-  ]);
+  vi.mocked(balancesService.getBalancesForEmployees).mockResolvedValue([balance('juan', 10, 3)]);
   vi.mocked(balancesService.getBalance).mockResolvedValue(null);
   vi.mocked(ledgerService.newTransactionId).mockImplementation(
     () => `Tx${String((idCounter += 1)).padStart(18, '0')}`,
@@ -177,7 +147,7 @@ describe('Balances tab (UI §6.7, DB §8.4)', () => {
       within(juanRow)
         .getAllByRole('cell')
         .map((c) => c.textContent),
-    ).toEqual(expect.arrayContaining(['15', '5', '10']));
+    ).toEqual(expect.arrayContaining(['10', '3', '7']));
     const anaRow = screen.getByText('Ana Reyes').closest('tr')!;
     expect(within(anaRow).getAllByText('—')).toHaveLength(3);
     expect(screen.queryByText('Mario Santos')).not.toBeInTheDocument(); // archived hidden by default
@@ -196,21 +166,6 @@ describe('Balances tab (UI §6.7, DB §8.4)', () => {
     expect(
       within(row).queryByRole('button', { name: /Allocate credits to/ }),
     ).not.toBeInTheDocument();
-  });
-
-  it('expands a row to the per-type breakdown (aria-expanded)', async () => {
-    renderPage();
-    await screen.findByText('Juan Dela Cruz');
-    const toggle = screen.getByRole('button', { name: 'Show breakdown for Juan Dela Cruz' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(toggle);
-    expect(
-      screen.getByRole('button', { name: 'Hide breakdown for Juan Dela Cruz' }),
-    ).toHaveAttribute('aria-expanded', 'true');
-    const breakdown = screen.getByRole('table', { name: /Juan Dela Cruz — .* breakdown/ });
-    expect(within(breakdown).getByText('Vacation Leave')).toBeInTheDocument();
-    expect(within(breakdown).getByText('Sick Leave')).toBeInTheDocument();
-    expect(within(breakdown).queryByText('Old Leave')).not.toBeInTheDocument(); // inactive with no balance
   });
 
   it('searches by name or employee ID', async () => {
@@ -256,7 +211,6 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
     const dialog = await openDialog();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
     expect(await within(dialog).findByText('Select an employee.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Select a leave type.')).toBeInTheDocument();
     expect(within(dialog).getByText('Enter the number of credits.')).toBeInTheDocument();
     expect(ledgerService.recordAllocation).not.toHaveBeenCalled();
   });
@@ -272,33 +226,27 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
   });
 
-  it('offers only active employees and active leave types (BR-CR-04)', async () => {
+  it('offers only active employees (BR-CR-04) and has no leave type field', async () => {
     const dialog = await openDialog();
     await userEvent.click(within(dialog).getByRole('combobox', { name: /^Employee/ }));
     expect(await screen.findByRole('option', { name: /Juan Dela Cruz/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Mario Santos/ })).not.toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
-    await userEvent.click(within(dialog).getByRole('combobox', { name: /Leave type/ }));
-    expect(await screen.findByRole('option', { name: 'Vacation Leave' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Old Leave' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('combobox', { name: /Leave type/ })).not.toBeInTheDocument();
   });
 
   it('TC-CR-09: the preview strip shows the current and the resulting total', async () => {
-    vi.mocked(balancesService.getBalance).mockResolvedValue(balance('juan', 'vac', 10, 0));
+    vi.mocked(balancesService.getBalance).mockResolvedValue(balance('juan', 10, 0));
     const dialog = await openDialog();
     await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-    await pick(dialog, /Leave type/, 'Vacation Leave');
     await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '2');
     const status = await within(dialog).findByText(/Current total:/);
-    expect(status).toHaveTextContent(
-      'Current total: 10 → After this allocation: 12 (Vacation Leave,',
-    );
+    expect(status).toHaveTextContent('Current total: 10 → After this allocation: 12 (');
   });
 
   it('submits once with the session id, then closes with a toast naming the new total', async () => {
     const dialog = await openDialog();
     await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-    await pick(dialog, /Leave type/, 'Vacation Leave');
     await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '2');
     await userEvent.type(within(dialog).getByLabelText('Remarks'), '  Top-up ');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
@@ -306,7 +254,6 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
       expect(ledgerService.recordAllocation).toHaveBeenCalledWith({
         transactionId: expect.stringMatching(/^Tx\d{18}$/) as string,
         employeeId: 'juan',
-        leaveTypeId: 'vac',
         year: YEAR,
         days: 2,
         remarks: 'Top-up',
@@ -314,7 +261,7 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
       });
     });
     expect(toast.success).toHaveBeenCalledWith(
-      `Added 2 Vacation Leave credits for Juan Dela Cruz (${String(YEAR)}). New total: 12.`,
+      `Added 2 credits for Juan Dela Cruz (${String(YEAR)}). New total: 12.`,
     );
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Allocate credits' })).not.toBeInTheDocument();
@@ -330,7 +277,6 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
     );
     const dialog = await openDialog();
     await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-    await pick(dialog, /Leave type/, 'Vacation Leave');
     await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '1');
     const submit = within(dialog).getByRole('button', { name: 'Allocate credits' });
     await userEvent.dblClick(submit);
@@ -351,7 +297,6 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Allocate credits' }));
       const dialog = await screen.findByRole('dialog', { name: 'Allocate credits' });
       await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-      await pick(dialog, /Leave type/, 'Vacation Leave');
       await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '1');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
       await waitFor(() => {
@@ -386,7 +331,6 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
     vi.mocked(ledgerService.recordAllocation).mockRejectedValue(new AppError('EMPLOYEE_ARCHIVED'));
     const dialog = await openDialog();
     await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-    await pick(dialog, /Leave type/, 'Vacation Leave');
     await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '1');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
@@ -499,7 +443,7 @@ describe('Reverse dialog (UI §6.11, TC-REV-08)', () => {
   }
 
   it('previews the effect on available, and requires a reason of at least 3 characters', async () => {
-    const dialog = await openReverse(allocation, balance('juan', 'vac', 12, 3));
+    const dialog = await openReverse(allocation, balance('juan', 12, 3));
     expect(await within(dialog).findByText(/Available will change from/)).toHaveTextContent(
       'Available will change from 9 to 7.',
     );
@@ -512,14 +456,14 @@ describe('Reverse dialog (UI §6.11, TC-REV-08)', () => {
   });
 
   it('starts with focus on Cancel (destructive action)', async () => {
-    const dialog = await openReverse(allocation, balance('juan', 'vac', 12, 3));
+    const dialog = await openReverse(allocation, balance('juan', 12, 3));
     await waitFor(() => {
       expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
     });
   });
 
   it('reverses with the reason and confirms', async () => {
-    const dialog = await openReverse(allocation, balance('juan', 'vac', 12, 3));
+    const dialog = await openReverse(allocation, balance('juan', 12, 3));
     await userEvent.type(within(dialog).getByLabelText(/^Reason/), ' Entered twice ');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Reverse entry' }));
     await waitFor(() => {
@@ -534,7 +478,7 @@ describe('Reverse dialog (UI §6.11, TC-REV-08)', () => {
 
   it('blocks reversing an allocation whose credits are partly used, with the explanation', async () => {
     const big = entry('A'.repeat(20), { days: 10, creditsDelta: 10 });
-    const dialog = await openReverse(big, balance('juan', 'vac', 10, 8));
+    const dialog = await openReverse(big, balance('juan', 10, 8));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       "Can't reverse this allocation: 8 of its 10 credits are already used. Reverse the related usage entries first.",
     );
@@ -543,7 +487,7 @@ describe('Reverse dialog (UI §6.11, TC-REV-08)', () => {
 
   it('shows a server refusal and keeps the dialog open', async () => {
     vi.mocked(ledgerService.reverseEntry).mockRejectedValue(new AppError('ALREADY_REVERSED'));
-    const dialog = await openReverse(allocation, balance('juan', 'vac', 12, 3));
+    const dialog = await openReverse(allocation, balance('juan', 12, 3));
     await userEvent.type(within(dialog).getByLabelText(/^Reason/), 'Entered twice');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Reverse entry' }));
     expect(
@@ -552,7 +496,7 @@ describe('Reverse dialog (UI §6.11, TC-REV-08)', () => {
   });
 
   it('does not offer "enter a corrected record" for an allocation', async () => {
-    const dialog = await openReverse(allocation, balance('juan', 'vac', 12, 3));
+    const dialog = await openReverse(allocation, balance('juan', 12, 3));
     expect(
       within(dialog).queryByLabelText('Then enter a corrected record'),
     ).not.toBeInTheDocument();

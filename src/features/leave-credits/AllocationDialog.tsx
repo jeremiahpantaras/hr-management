@@ -31,14 +31,12 @@ import { useEmployeeOptions } from '@/features/employees/hooks/useEmployees';
 import { useBalance } from '@/features/leave-credits/hooks/useBalances';
 import { useRecordAllocation } from '@/features/leave-history/hooks/useLedger';
 import { ledgerErrorMessage } from '@/features/leave-history/ledgerMessages';
-import { useActiveLeaveTypes } from '@/features/leave-types/hooks/useLeaveTypes';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { newTransactionId } from '@/services/leaveLedger.service';
 import { getYearOptions } from '@/utils/years';
 
 export interface AllocationDefaults {
   readonly employeeId?: string;
-  readonly leaveTypeId?: string;
 }
 
 interface AllocationDialogProps {
@@ -52,7 +50,7 @@ interface AllocationDialogProps {
 /**
  * Allocate credits (UI spec §6.8). A fresh idempotency key is created every time the dialog opens
  * (the content is remounted per open), so a retry reuses it and a deliberate second entry does not
- * (D-05). Only active employees and active leave types can be chosen (BR-CR-04).
+ * (D-05). Only active employees can be chosen (BR-CR-04).
  */
 export function AllocationDialog({ open, onOpenChange, year, defaults }: AllocationDialogProps) {
   return (
@@ -73,7 +71,6 @@ function AllocationDialogContent({
   // One id per dialog session: the idempotency key (D-05).
   const [transactionId] = useState(() => newTransactionId());
   const { employees, isPending: employeesPending } = useEmployeeOptions();
-  const { leaveTypes, isPending: typesPending } = useActiveLeaveTypes();
   const allocate = useRecordAllocation();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -86,7 +83,6 @@ function AllocationDialogContent({
     resolver: zodResolver(allocationSchema),
     defaultValues: {
       employeeId: defaults?.employeeId ?? '',
-      leaveTypeId: defaults?.leaveTypeId ?? '',
       year: String(year),
       days: '',
       remarks: '',
@@ -97,44 +93,34 @@ function AllocationDialogContent({
     onDirtyChange(isDirty);
   }, [isDirty, onDirtyChange]);
 
-  const [employeeId, leaveTypeId, yearText, daysText, remarks] = useWatch({
+  const [employeeId, yearText, daysText, remarks] = useWatch({
     control,
-    name: ['employeeId', 'leaveTypeId', 'year', 'days', 'remarks'],
+    name: ['employeeId', 'year', 'days', 'remarks'],
   });
   const selectedEmployee = employees.find((employee) => employee.id === employeeId);
-  const selectedType = leaveTypes.find((type) => type.id === leaveTypeId);
   const yearNumber = Number(yearText);
-  const balance = useBalance(
-    selectedEmployee ? employeeId : null,
-    yearNumber,
-    selectedType ? leaveTypeId : null,
-  );
+  const balance = useBalance(selectedEmployee ? employeeId : null, yearNumber);
   const added = Number(daysText);
   const currentTotal = balance.data?.totalCredits ?? 0;
-  const showPreview =
-    selectedEmployee !== undefined && selectedType !== undefined && !balance.isPending;
+  const showPreview = selectedEmployee !== undefined && !balance.isPending;
 
   const { run, pending } = useSubmitGuard(async (values: AllocationInput) => {
     setServerError(null);
     const employeeName = selectedEmployee?.fullName ?? 'the employee';
-    const typeName = selectedType?.name ?? 'leave';
     try {
       const result = await allocate.mutateAsync({
         transactionId,
         employeeId: values.employeeId,
-        leaveTypeId: values.leaveTypeId,
         year: values.year,
         days: values.days,
         remarks: values.remarks,
       });
       toast.success(
-        `Added ${formatDays(values.days)} ${typeName} credits for ${employeeName} (${String(values.year)}). New total: ${formatDays(result.balance.totalCredits)}.`,
+        `Added ${formatDays(values.days)} credits for ${employeeName} (${String(values.year)}). New total: ${formatDays(result.balance.totalCredits)}.`,
       );
       onSaved();
     } catch (error) {
-      setServerError(
-        ledgerErrorMessage(error, { employeeName, leaveTypeName: typeName, year: values.year }),
-      );
+      setServerError(ledgerErrorMessage(error, { employeeName, year: values.year }));
     }
   });
 
@@ -184,22 +170,6 @@ function AllocationDialogContent({
           />
           <Controller
             control={control}
-            name="leaveTypeId"
-            render={({ field }) => (
-              <SelectField
-                label="Leave type"
-                required
-                placeholder={typesPending ? 'Loading…' : 'Select a leave type'}
-                options={leaveTypes.map((type) => ({ value: type.id, label: type.name }))}
-                value={field.value}
-                onValueChange={field.onChange}
-                error={errors.leaveTypeId?.message}
-                disabled={pending}
-              />
-            )}
-          />
-          <Controller
-            control={control}
             name="year"
             render={({ field }) => (
               <SelectField
@@ -230,7 +200,7 @@ function AllocationDialogContent({
               <strong>
                 {isValidDays(added) ? formatDays(currentTotal + added) : formatDays(currentTotal)}
               </strong>{' '}
-              ({selectedType.name}, {yearText})
+              ({yearText})
             </p>
           ) : null}
 

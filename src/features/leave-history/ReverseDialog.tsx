@@ -62,7 +62,7 @@ interface ContentProps {
 function ReverseDialogContent({ entry, onReversed }: ContentProps) {
   const { onDirtyChange, onRequestClose, onSaved } = useSessionDialog();
   const reverse = useReverseEntry();
-  const balanceQuery = useBalance(entry.employeeId, entry.leaveYear, entry.leaveTypeId);
+  const balanceQuery = useBalance(entry.employeeId, entry.leaveYear);
   const [serverError, setServerError] = useState<string | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const isUsage = entry.transactionType === 'USAGE';
@@ -101,7 +101,6 @@ function ReverseDialogContent({ entry, onReversed }: ContentProps) {
       setServerError(
         ledgerErrorMessage(error, {
           employeeName: entry.employeeNameSnapshot,
-          leaveTypeName: entry.leaveTypeNameSnapshot,
         }),
       );
     }
@@ -134,10 +133,8 @@ function ReverseDialogContent({ entry, onReversed }: ContentProps) {
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-control bg-surface-muted p-3 text-sm">
             <dt className="text-fg-muted">Employee</dt>
             <dd>{entry.employeeNameSnapshot}</dd>
-            <dt className="text-fg-muted">Leave type</dt>
-            <dd>
-              {entry.leaveTypeNameSnapshot} · {String(entry.leaveYear)}
-            </dd>
+            <dt className="text-fg-muted">Leave year</dt>
+            <dd>{String(entry.leaveYear)}</dd>
             <dt className="text-fg-muted">Entry</dt>
             <dd>
               {effectLabel(entry)}

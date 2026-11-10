@@ -51,9 +51,7 @@ export function LedgerDetailSheet({
         {entry ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex flex-col gap-1 border-b px-5 pt-5 pr-14 pb-3">
-              <SheetTitle className="text-section text-fg">
-                {transactionKind(entry)} · {entry.leaveTypeNameSnapshot}
-              </SheetTitle>
+              <SheetTitle className="text-section text-fg">{transactionKind(entry)}</SheetTitle>
               <SheetDescription className="text-sm text-fg-muted">
                 {entry.employeeNameSnapshot} · {String(entry.leaveYear)}
               </SheetDescription>
@@ -78,7 +76,7 @@ export function LedgerDetailSheet({
                 ) : null}
               </Row>
               <Row label="Position">{entry.positionSnapshot}</Row>
-              <Row label="Department">{entry.departmentSnapshot ?? '—'}</Row>
+              <Row label="Location">{entry.departmentSnapshot ?? '—'}</Row>
               <Row label="Balance after">
                 {formatDays(entry.resultingTotalCredits - entry.resultingTotalUsed)} available (
                 {formatDays(entry.resultingTotalCredits)} credits,{' '}

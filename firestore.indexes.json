@@ -41,24 +41,6 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "leaveTypeId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaveTransactions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "leaveYear",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "transactionType",
           "order": "ASCENDING"
         },
@@ -78,76 +60,6 @@
         },
         {
           "fieldPath": "employeeId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "leaveTypeId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaveTransactions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "leaveYear",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "employeeId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "transactionType",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaveTransactions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "leaveYear",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "leaveTypeId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "transactionType",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaveTransactions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "leaveYear",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "employeeId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "leaveTypeId",
           "order": "ASCENDING"
         },
         {
@@ -184,20 +96,6 @@
         },
         {
           "fieldPath": "year",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaveBalances",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "year",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "leaveTypeId",
           "order": "ASCENDING"
         }
       ]

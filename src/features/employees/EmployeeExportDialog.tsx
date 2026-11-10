@@ -17,7 +17,7 @@ import {
   loadPrintPreferences,
   savePrintPreferences,
   type PrintPreferences,
-} from '@/features/employees/printPreferences';
+} from '@/utils/printPreferences';
 import type { Employee } from '@/types/models';
 import type { Orientation, PaperSize } from '@/utils/excel/xlsxPatch';
 

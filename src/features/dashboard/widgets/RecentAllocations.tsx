@@ -24,7 +24,7 @@ export function RecentAllocations({ year }: { readonly year: number }) {
               <span className="flex min-w-0 flex-col">
                 <span className="truncate font-medium text-fg">{entry.employeeNameSnapshot}</span>
                 <span className="truncate text-caption text-fg-muted">
-                  {entry.leaveTypeNameSnapshot} · by {entry.createdByName}
+                  by {entry.createdByName}
                   {entry.createdAt ? ` · ${formatTimestamp(entry.createdAt)}` : ''}
                 </span>
               </span>

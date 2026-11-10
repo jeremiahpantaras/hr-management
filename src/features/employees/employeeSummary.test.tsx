@@ -12,13 +12,11 @@ import { EmployeeDetailPage } from '@/features/employees/EmployeeDetailPage';
 import * as employeesService from '@/services/employees.service';
 import * as balancesService from '@/services/leaveBalances.service';
 import * as ledgerService from '@/services/leaveLedger.service';
-import * as typesService from '@/services/leaveTypes.service';
-import type { Employee, LeaveBalance, LeaveTransaction, LeaveType } from '@/types/models';
+import type { Employee, LeaveBalance, LeaveTransaction } from '@/types/models';
 
 vi.mock('@/services/employees.service');
 vi.mock('@/services/leaveBalances.service');
 vi.mock('@/services/leaveLedger.service');
-vi.mock('@/services/leaveTypes.service');
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const YEAR = new Date().getFullYear();
@@ -41,25 +39,10 @@ const juan: Employee = {
   updatedBy: 'hr1',
 };
 const archived: Employee = { ...juan, id: 'arch', fullName: 'Mario Santos', isArchived: true };
-const type = (id: string, name: string, isActive = true): LeaveType => ({
-  id,
-  name,
-  description: null,
-  isActive,
-  createdAt: null,
-  createdBy: 'hr1',
-  updatedAt: null,
-  updatedBy: 'hr1',
-});
-const vac = type('vac', 'Vacation Leave');
-const sick = type('sick', 'Sick Leave');
-const emer = type('emer', 'Emergency Leave');
-const retired = type('ret', 'Retired Leave', false);
 
-const bal = (typeId: string, credits: number, used: number, year = YEAR): LeaveBalance => ({
-  id: `juan_${String(year)}_${typeId}`,
+const bal = (credits: number, used: number, year = YEAR): LeaveBalance => ({
+  id: `juan_${String(year)}`,
   employeeId: 'juan',
-  leaveTypeId: typeId,
   year,
   totalCredits: credits,
   totalUsed: used,
@@ -68,7 +51,7 @@ const bal = (typeId: string, credits: number, used: number, year = YEAR): LeaveB
   createdAt: null,
   updatedAt: null,
 });
-const juan2026 = [bal('vac', 10, 3), bal('sick', 5, 2), bal('emer', 3, 0)];
+const juan2026 = [bal(10, 5)];
 
 function entry(id: string, over: Partial<LeaveTransaction> = {}): LeaveTransaction {
   return {
@@ -78,10 +61,8 @@ function entry(id: string, over: Partial<LeaveTransaction> = {}): LeaveTransacti
     employeeNameSnapshot: 'Juan Dela Cruz',
     positionSnapshot: 'Accounting Staff',
     departmentSnapshot: 'Finance',
-    leaveTypeId: 'vac',
-    leaveTypeNameSnapshot: 'Vacation Leave',
     leaveYear: YEAR,
-    balanceId: `juan_${String(YEAR)}_vac`,
+    balanceId: `juan_${String(YEAR)}`,
     transactionType: 'ALLOCATION',
     days: 10,
     creditsDelta: 10,
@@ -127,7 +108,6 @@ beforeEach(() => {
   );
   vi.mocked(employeesService.archiveEmployee).mockResolvedValue(undefined);
   vi.mocked(employeesService.restoreEmployee).mockResolvedValue(undefined);
-  vi.mocked(typesService.listLeaveTypes).mockResolvedValue([emer, retired, sick, vac]);
   vi.mocked(balancesService.getBalancesForEmployeeYear).mockImplementation((_id, year) =>
     Promise.resolve(year === YEAR ? juan2026 : []),
   );
@@ -141,25 +121,22 @@ beforeEach(() => {
 });
 
 describe('Juan-2026 summary (TC-SUM-02, FR-SUM-02/03)', () => {
-  it('shows the three tiles 18 / 5 / 13 and the breakdown with a matching totals row', async () => {
+  it('shows the three tiles 10 / 5 / 5 and a progress bar of the credits used', async () => {
     renderAt('/employees/juan');
-    const table = await screen.findByRole('table', { name: /leave breakdown/ });
-    const tiles = screen
-      .getByRole('heading', { name: `Leave summary for ${String(YEAR)}` })
-      .closest('section')!;
+    const tiles = (
+      await screen.findByRole('heading', { name: `Leave summary for ${String(YEAR)}` })
+    ).closest('section')!;
+    await within(tiles).findByRole('progressbar', {
+      name: `Juan Dela Cruz — ${String(YEAR)} credits used`,
+    });
     expect(within(tiles).getByText('Total Credits').closest('div.flex-col')).toHaveTextContent(
-      '18',
+      '10',
     );
     expect(within(tiles).getByText('Total Used').closest('div.flex-col')).toHaveTextContent('5');
-    expect(within(tiles).getByText('Total Unused').closest('div.flex-col')).toHaveTextContent('13');
-
-    const rowText = (name: string) => within(table).getByText(name).closest('tr')!.textContent;
-    expect(rowText('Vacation Leave')).toMatch(/Vacation Leave.*10.*3.*7/);
-    expect(rowText('Sick Leave')).toMatch(/Sick Leave.*5.*2.*3/);
-    expect(rowText('Emergency Leave')).toMatch(/Emergency Leave.*3.*0.*3/);
-    const total = within(table).getByText('Total').closest('tr')!;
-    expect(total).toHaveTextContent(/Total.*18.*5.*13/);
-    expect(within(table).queryByText('Retired Leave')).not.toBeInTheDocument(); // inactive, no balance
+    expect(within(tiles).getByText('Total Unused').closest('div.flex-col')).toHaveTextContent('5');
+    expect(within(tiles).getByText('5 used of 10')).toBeInTheDocument();
+    // there is no per-leave-type breakdown any more
+    expect(screen.queryByRole('table', { name: /leave breakdown/ })).not.toBeInTheDocument();
     expect(balancesService.getBalancesForEmployeeYear).toHaveBeenCalledWith('juan', YEAR);
   });
 
@@ -175,38 +152,18 @@ describe('Juan-2026 summary (TC-SUM-02, FR-SUM-02/03)', () => {
         `No credits have been allocated to this employee for ${String(YEAR - 1)}.`,
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText('18')).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     expect(balancesService.getBalancesForEmployeeYear).toHaveBeenCalledWith('juan', YEAR - 1);
   });
 
-  it('TC-SUM-04: an active type without a balance shows 0 / 0 / 0 and "No credits assigned"', async () => {
-    vi.mocked(balancesService.getBalancesForEmployeeYear).mockResolvedValue([bal('vac', 10, 3)]);
-    renderAt('/employees/juan');
-    const table = await screen.findByRole('table', { name: /leave breakdown/ });
-    const row = within(table).getByText('Sick Leave').closest('tr')!;
-    expect(row).toHaveTextContent('No credits assigned');
-    expect(row).toHaveTextContent(/0.*0.*0/);
-  });
-
-  it('TC-SUM-05: an inactive type with a balance is listed and marked Inactive; one without is not', async () => {
-    vi.mocked(balancesService.getBalancesForEmployeeYear).mockResolvedValue([
-      bal('vac', 10, 3),
-      bal('ret', 2, 1),
-    ]);
-    renderAt('/employees/juan');
-    const table = await screen.findByRole('table', { name: /leave breakdown/ });
-    const row = within(table).getByText('Retired Leave').closest('tr')!;
-    expect(within(row).getByText('Inactive')).toBeInTheDocument();
-  });
-
-  it('shows a loading state, then an error with Retry when the summary cannot load', async () => {
+  it('shows an error with Retry when the summary cannot load', async () => {
     vi.mocked(balancesService.getBalancesForEmployeeYear).mockRejectedValueOnce(
       new AppError('OFFLINE'),
     );
     renderAt('/employees/juan');
     expect(await screen.findByText("You're offline. Reconnect and try again.")).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole('button', { name: /retry/i })[0]!);
-    expect(await screen.findByRole('table', { name: /leave breakdown/ })).toBeInTheDocument();
+    expect(await screen.findByText('5 used of 10')).toBeInTheDocument();
   });
 });
 

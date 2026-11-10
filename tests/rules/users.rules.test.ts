@@ -30,7 +30,6 @@ const COLLECTIONS = [
   'users',
   'employees',
   'employeeNumbers',
-  'leaveTypes',
   'leaveBalances',
   'leaveTransactions',
 ] as const;

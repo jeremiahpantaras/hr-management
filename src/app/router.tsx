@@ -115,18 +115,7 @@ const appRoutes: RouteObject[] = [
               import('@/features/reports/ReportsPage').then((m) => ({ Component: m.ReportsPage })),
             handle: handle('Reports'),
           },
-          { path: 'settings', element: <Navigate to="/settings/leave-types" replace /> },
-          {
-            path: 'settings/leave-types',
-            lazy: () =>
-              import('@/features/leave-types/LeaveTypesSettingsPage').then((m) => ({
-                Component: m.LeaveTypesSettingsPage,
-              })),
-            handle: handle('Leave types', [
-              { label: 'Settings', to: '/settings' },
-              { label: 'Leave types' },
-            ]),
-          },
+          { path: 'settings', element: <Navigate to="/settings/account" replace /> },
           {
             path: 'settings/account',
             lazy: () =>

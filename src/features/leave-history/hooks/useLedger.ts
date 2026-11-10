@@ -44,7 +44,6 @@ export const dashboardKeysRoot = ['dashboard'] as const;
 export interface LedgerFilters {
   readonly year: number;
   readonly employeeId?: string;
-  readonly leaveTypeId?: string;
   readonly transactionType?: TransactionType;
 }
 

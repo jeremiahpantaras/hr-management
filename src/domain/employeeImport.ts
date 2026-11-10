@@ -13,7 +13,7 @@ export const IMPORT_COLUMNS = [
   'Employee ID',
   'Complete Name',
   'Position',
-  'Department',
+  'Location',
   'Employment Status',
 ] as const;
 export type ImportColumn = (typeof IMPORT_COLUMNS)[number];
@@ -33,7 +33,7 @@ const ALIASES: Record<ImportColumn, readonly string[]> = {
   'Employee ID': ['employeeid', 'employeeno', 'employeenumber', 'empid', 'empno', 'id'],
   'Complete Name': ['completename', 'fullname', 'name', 'employeename'],
   Position: ['position', 'jobtitle', 'title'],
-  Department: ['department', 'dept'],
+  Location: ['location', 'department', 'dept'],
   'Employment Status': ['employmentstatus', 'status', 'employmenttype'],
 };
 
@@ -108,7 +108,7 @@ export function parseEmployeeRows(
   if (header === null) {
     return {
       ok: false,
-      error: `We couldn't find the header row. The first sheet needs these columns: ${REQUIRED.join(', ')} (Department is optional). Download the template to start from.`,
+      error: `We couldn't find the header row. The first sheet needs these columns: ${REQUIRED.join(', ')} (Location is optional). Download the template to start from.`,
     };
   }
 
@@ -125,7 +125,7 @@ export function parseEmployeeRows(
       employeeNumber: get(cells, 'Employee ID'),
       fullName: get(cells, 'Complete Name'),
       position: get(cells, 'Position'),
-      department: get(cells, 'Department'),
+      department: get(cells, 'Location'),
       employmentStatus: normalizeStatus(get(cells, 'Employment Status')),
     };
     if (Object.values(values).every((value) => value === '')) continue; // blank row

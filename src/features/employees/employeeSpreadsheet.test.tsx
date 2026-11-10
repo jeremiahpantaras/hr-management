@@ -234,7 +234,7 @@ describe('Import employees', () => {
   it('explains the columns and offers the template for A4 or Letter', async () => {
     const dialog = await openImport();
     expect(
-      within(dialog).getByText(/Employee ID, Complete Name, Position, Department/),
+      within(dialog).getByText(/Employee ID, Complete Name, Position, Location/),
     ).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Download template' }));
     await waitFor(() => {

@@ -1,6 +1,5 @@
 export interface LedgerFilterState {
   readonly employeeId: string | null;
-  readonly leaveTypeId: string;
   /** `''` = all kinds (history page only). */
   readonly transactionType: string;
   readonly text: string;
@@ -10,7 +9,6 @@ export interface LedgerFilterState {
 
 export const EMPTY_FILTERS: LedgerFilterState = {
   employeeId: null,
-  leaveTypeId: '',
   transactionType: '',
   text: '',
   dateFrom: '',

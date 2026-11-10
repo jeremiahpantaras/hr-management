@@ -3,7 +3,6 @@ export const COLLECTIONS = {
   users: 'users',
   employees: 'employees',
   employeeNumbers: 'employeeNumbers',
-  leaveTypes: 'leaveTypes',
   leaveBalances: 'leaveBalances',
   leaveTransactions: 'leaveTransactions',
 } as const;

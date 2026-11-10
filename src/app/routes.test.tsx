@@ -9,18 +9,15 @@ import { SIGNED_IN_VALUE, makeAuthValue } from '@/features/auth/authTestHelpers'
 import * as employeesService from '@/services/employees.service';
 import * as balancesService from '@/services/leaveBalances.service';
 import * as ledgerService from '@/services/leaveLedger.service';
-import * as typesService from '@/services/leaveTypes.service';
 
 vi.mock('@/services/employees.service');
 vi.mock('@/services/leaveBalances.service');
 vi.mock('@/services/leaveLedger.service');
-vi.mock('@/services/leaveTypes.service');
 
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(employeesService.listEmployees).mockResolvedValue([]);
   vi.mocked(employeesService.getEmployee).mockResolvedValue(null);
-  vi.mocked(typesService.listLeaveTypes).mockResolvedValue([]);
   vi.mocked(balancesService.getBalancesForEmployees).mockResolvedValue([]);
   vi.mocked(ledgerService.listLedgerPage).mockResolvedValue({
     items: [],
@@ -53,7 +50,6 @@ const shellRoutes = [
   ['/leave-usage', 'Leave Usage', 'Leave Usage', 'Leave Usage'],
   ['/leave-history', 'Leave History', 'Leave History', 'Leave History'],
   ['/reports', 'Reports', 'Reports', 'Reports'],
-  ['/settings/leave-types', 'Leave types', 'Leave types', 'Settings'],
   ['/settings/account', 'Account', 'Account', 'Settings'],
 ] as const;
 
@@ -74,12 +70,10 @@ describe('route table (Architecture §4.2)', () => {
     },
   );
 
-  it('/settings redirects to /settings/leave-types', async () => {
+  it('/settings redirects to /settings/account', async () => {
     const router = renderAt('/settings');
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Leave types' }),
-    ).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/settings/leave-types');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Account' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/settings/account');
   });
 
   it.each([
@@ -124,7 +118,6 @@ describe('route table (Architecture §4.2)', () => {
       '/leave-usage',
       '/leave-history',
       '/reports',
-      '/settings/leave-types',
       '/settings/account',
     ]) {
       renderAt(path);

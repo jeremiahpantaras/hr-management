@@ -21,7 +21,7 @@ export interface DataTableColumn<T> {
   readonly header: ReactNode;
   readonly cell: (row: T) => ReactNode;
   readonly align?: 'left' | 'right' | 'center';
-  /** `low` columns (Department, Recorded by, Remarks …) are hidden below 768px (UI spec §8). */
+  /** `low` columns (Location, Recorded by, Remarks …) are hidden below 768px (UI spec §8). */
   readonly priority?: 'low';
   readonly sortable?: boolean;
   /** Renders the cell as `<th scope="row">` — the cell that identifies the row. */

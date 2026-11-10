@@ -31,7 +31,6 @@ import { useEmployeeOptions } from '@/features/employees/hooks/useEmployees';
 import { useBalance } from '@/features/leave-credits/hooks/useBalances';
 import { ledgerKeys, useRecordUsage } from '@/features/leave-history/hooks/useLedger';
 import { ledgerErrorMessage } from '@/features/leave-history/ledgerMessages';
-import { useActiveLeaveTypes } from '@/features/leave-types/hooks/useLeaveTypes';
 import { OverlapWarning } from '@/features/leave-usage/OverlapWarning';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { findUsageForOverlap, newTransactionId } from '@/services/leaveLedger.service';
@@ -40,7 +39,6 @@ import { getYearOptions } from '@/utils/years';
 
 export interface UsageDefaults {
   readonly employeeId?: string;
-  readonly leaveTypeId?: string;
   readonly year?: number;
   readonly dateFrom?: string;
   readonly dateTo?: string;
@@ -107,7 +105,6 @@ function RecordUsageDialogContent({
   const queryClient = useQueryClient();
   const [transactionId] = useState(() => newTransactionId());
   const { employees, isPending: employeesPending } = useEmployeeOptions();
-  const { leaveTypes, isPending: typesPending } = useActiveLeaveTypes();
   const record = useRecordUsage();
   const [serverError, setServerError] = useState<string | null>(null);
   const [overlapState, setOverlapState] = useState<OverlapState | null>(null);
@@ -122,7 +119,6 @@ function RecordUsageDialogContent({
     resolver: zodResolver(usageSchema),
     defaultValues: {
       employeeId: defaults?.employeeId ?? '',
-      leaveTypeId: defaults?.leaveTypeId ?? '',
       year: String(defaults?.year ?? year),
       dateFrom: defaults?.dateFrom ?? '',
       dateTo: defaults?.dateTo ?? '',
@@ -136,26 +132,17 @@ function RecordUsageDialogContent({
     onDirtyChange(isDirty || replacementNotice);
   }, [isDirty, replacementNotice, onDirtyChange]);
 
-  const [employeeId, leaveTypeId, yearText, dateFrom, dateTo, daysText, remarks] = useWatch({
+  const [employeeId, yearText, dateFrom, dateTo, daysText, remarks] = useWatch({
     control,
-    name: ['employeeId', 'leaveTypeId', 'year', 'dateFrom', 'dateTo', 'days', 'remarks'],
+    name: ['employeeId', 'year', 'dateFrom', 'dateTo', 'days', 'remarks'],
   });
   const yearNumber = Number(yearText);
   const selectedEmployee = employees.find((e) => e.id === employeeId);
-  const selectedType = leaveTypes.find((t) => t.id === leaveTypeId);
-  const balanceQuery = useBalance(
-    selectedEmployee ? employeeId : null,
-    yearNumber,
-    selectedType ? leaveTypeId : null,
-  );
+  const balanceQuery = useBalance(selectedEmployee ? employeeId : null, yearNumber);
   const balance = balanceQuery.data;
   const requested = Number(daysText);
   const daysValid = isValidDays(requested);
-  const noBalance =
-    selectedEmployee !== undefined &&
-    selectedType !== undefined &&
-    !balanceQuery.isPending &&
-    balance === null;
+  const noBalance = selectedEmployee !== undefined && !balanceQuery.isPending && balance === null;
   const insufficient =
     balance !== null && balance !== undefined && daysValid && requested > balance.availableCredits;
   const calendarDays =
@@ -170,7 +157,6 @@ function RecordUsageDialogContent({
   const { run, pending } = useSubmitGuard(async (values: UsageInput) => {
     setServerError(null);
     const employeeName = selectedEmployee?.fullName ?? 'the employee';
-    const typeName = selectedType?.name ?? 'leave';
     try {
       // Advisory overlap check against FRESH data, then require an explicit acknowledgement.
       if (activeOverlap === null) {
@@ -192,7 +178,6 @@ function RecordUsageDialogContent({
       const result = await record.mutateAsync({
         transactionId,
         employeeId: values.employeeId,
-        leaveTypeId: values.leaveTypeId,
         year: values.year,
         days: values.days,
         dateFrom: values.dateFrom,
@@ -200,7 +185,7 @@ function RecordUsageDialogContent({
         remarks: values.remarks,
       });
       toast.success(
-        `Recorded ${formatDays(values.days)} ${values.days === 1 ? 'day' : 'days'} of ${typeName} for ${employeeName}. Remaining: ${formatDays(result.balance.totalCredits - result.balance.totalUsed)}.`,
+        `Recorded ${formatDays(values.days)} ${values.days === 1 ? 'day' : 'days'} of leave for ${employeeName}. Remaining: ${formatDays(result.balance.totalCredits - result.balance.totalUsed)}.`,
       );
       onSaved();
       onRecorded?.();
@@ -208,7 +193,6 @@ function RecordUsageDialogContent({
       setServerError(
         ledgerErrorMessage(error, {
           employeeName,
-          leaveTypeName: typeName,
           year: values.year,
           noBalance,
         }),
@@ -273,22 +257,6 @@ function RecordUsageDialogContent({
           />
           <Controller
             control={control}
-            name="leaveTypeId"
-            render={({ field }) => (
-              <SelectField
-                label="Leave type"
-                required
-                placeholder={typesPending ? 'Loading…' : 'Select a leave type'}
-                options={leaveTypes.map((type) => ({ value: type.id, label: type.name }))}
-                value={field.value}
-                onValueChange={field.onChange}
-                error={errors.leaveTypeId?.message}
-                disabled={pending}
-              />
-            )}
-          />
-          <Controller
-            control={control}
             name="year"
             render={({ field }) => (
               <SelectField
@@ -333,13 +301,13 @@ function RecordUsageDialogContent({
             {...register('days')}
           />
 
-          {selectedEmployee && selectedType ? (
+          {selectedEmployee ? (
             noBalance ? (
               <p
                 role="status"
                 className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
               >
-                No {selectedType.name} credits have been allocated to this employee for {yearText}.{' '}
+                No credits have been allocated to this employee for {yearText}.{' '}
                 <Link to={`/leave-credits?year=${yearText}`} className="font-medium underline">
                   Allocate credits
                 </Link>
@@ -360,8 +328,7 @@ function RecordUsageDialogContent({
                   </>
                 ) : (
                   <>
-                    {selectedType.name} · {yearText} — Available{' '}
-                    <strong>{formatDays(balance.availableCredits)}</strong>{' '}
+                    {yearText} — Available <strong>{formatDays(balance.availableCredits)}</strong>{' '}
                     {balance.availableCredits === 1 ? 'day' : 'days'}.
                     {daysValid ? (
                       <>

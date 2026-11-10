@@ -61,7 +61,25 @@ describe('header detection', () => {
     expect(result).toMatchObject({ ok: true, headerRow: 3 });
     expect(result.ok && result.rows[0]?.rowNumber).toBe(4);
   });
-  it('Department is optional; the other four are required', () => {
+  it('accepts the old "Department" header as a synonym for Location', () => {
+    const result = parseEmployeeRows(
+      [
+        ['Employee ID', 'Complete Name', 'Position', 'Department', 'Employment Status'],
+        ['E1', 'Ana', 'Clerk', 'Plant 1', 'Regular'],
+      ],
+      none,
+    );
+    expect(result.ok && result.rows[0]?.department).toBe('Plant 1');
+    const location = parseEmployeeRows(
+      [
+        ['Employee ID', 'Complete Name', 'Position', 'Location', 'Employment Status'],
+        ['E1', 'Ana', 'Clerk', 'Plant 2', 'Regular'],
+      ],
+      none,
+    );
+    expect(location.ok && location.rows[0]?.department).toBe('Plant 2');
+  });
+  it('Location is optional; the other four are required', () => {
     expect(
       parseEmployeeRows(
         [
@@ -111,7 +129,7 @@ describe('row validation uses the same rules as the Add-employee form', () => {
         'Use letters, numbers, dots, dashes or underscores (max 30).',
         "Enter the employee's complete name.",
         'Enter a position.',
-        'Department is too long (80 characters max).',
+        'Location is too long (80 characters max).',
         'Select an employment status.',
       ]),
     );
