@@ -23,15 +23,18 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   };
 }
 
-Element.prototype.scrollIntoView = function scrollIntoView(): void {
-  /* jsdom stub */
-};
-Element.prototype.hasPointerCapture = function hasPointerCapture(): boolean {
-  return false;
-};
-Element.prototype.setPointerCapture = function setPointerCapture(): void {
-  /* jsdom stub */
-};
-Element.prototype.releasePointerCapture = function releasePointerCapture(): void {
-  /* jsdom stub */
-};
+// (guarded: a few suites run in the Node environment, which has no DOM)
+if (typeof Element !== 'undefined') {
+  Element.prototype.scrollIntoView = function scrollIntoView(): void {
+    /* jsdom stub */
+  };
+  Element.prototype.hasPointerCapture = function hasPointerCapture(): boolean {
+    return false;
+  };
+  Element.prototype.setPointerCapture = function setPointerCapture(): void {
+    /* jsdom stub */
+  };
+  Element.prototype.releasePointerCapture = function releasePointerCapture(): void {
+    /* jsdom stub */
+  };
+}

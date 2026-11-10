@@ -15,6 +15,9 @@ import { useAuth } from '@/features/auth/useAuth';
 import {
   archiveEmployee,
   createEmployee,
+  createEmployeesBulk,
+  type BulkCreateItem,
+  type BulkCreateResult,
   getEmployee,
   listEmployees,
   restoreEmployee,
@@ -112,5 +115,23 @@ export function useRestoreEmployee(): UseMutationResult<void, Error, string> {
   return useMutation({
     mutationFn: (employeeId: string) => restoreEmployee(employeeId, requireActor(uid)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: employeeKeys.all }),
+  });
+}
+
+/** Bulk import: creates the given employees (a few at a time) and refreshes the directory once. */
+export function useImportEmployees(): UseMutationResult<
+  BulkCreateResult[],
+  Error,
+  {
+    readonly items: readonly BulkCreateItem[];
+    readonly onProgress?: (done: number, total: number) => void;
+  }
+> {
+  const queryClient = useQueryClient();
+  const uid = useActorUid();
+  return useMutation({
+    mutationFn: ({ items, onProgress }) =>
+      createEmployeesBulk(items, requireActor(uid), { onProgress }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: employeeKeys.all }),
   });
 }

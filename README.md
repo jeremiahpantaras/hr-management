@@ -58,6 +58,15 @@ configuration. Real project values, when the time comes, belong in `.env.develop
 Full design: [`planning/`](planning/) (requirements, architecture, database, security, UI, roadmap, business rules).
 Build history, deviations and verification evidence: [`planning/IMPLEMENTATION_PROGRESS.md`](planning/IMPLEMENTATION_PROGRESS.md).
 
+## Employees: import and export (Excel)
+
+On the Employees page, **Export** downloads the current view (or everyone, archived included) as an `.xlsx`
+laid out for printing on **Letter or A4**, landscape or portrait: one page wide, header row repeated on every
+page, page numbers in the footer. **Import** takes an `.xlsx` (download the template first), shows a verdict for
+every row _before_ saving anything, and then creates only the valid rows — existing employees are never changed and
+duplicate Employee IDs (any case, archived included) are skipped. Limits: 500 employees and 5 MB per file. An
+exported file can be imported again.
+
 ## Project layout
 
 ```

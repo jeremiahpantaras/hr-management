@@ -187,3 +187,59 @@ export function archiveEmployee(employeeId: string, actorUid: string): Promise<v
 export function restoreEmployee(employeeId: string, actorUid: string): Promise<void> {
   return setArchived(employeeId, false, actorUid);
 }
+
+export interface BulkCreateItem {
+  /** The spreadsheet row, so a failure can be reported against the row the user sees. */
+  readonly rowNumber: number;
+  readonly input: EmployeeInput;
+}
+
+export interface BulkCreateResult {
+  readonly rowNumber: number;
+  readonly ok: boolean;
+  /** Why it failed (e.g. DUPLICATE_EMPLOYEE_NUMBER when someone else took the ID meanwhile). */
+  readonly code: AppError['code'] | null;
+}
+
+/**
+ * Creates employees one transaction each (so the Employee-ID reservation stays atomic and the rules
+ * keep verifying every pair), a few at a time. A failure never stops the others, and nothing here
+ * can overwrite an existing employee: an ID that is already reserved is reported as a duplicate.
+ */
+export async function createEmployeesBulk(
+  items: readonly BulkCreateItem[],
+  actorUid: string,
+  options: {
+    readonly concurrency?: number;
+    readonly onProgress?: (done: number, total: number) => void;
+  } = {},
+): Promise<BulkCreateResult[]> {
+  const results: BulkCreateResult[] = new Array<BulkCreateResult>(items.length);
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? 4, 8));
+  let next = 0;
+  let done = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = next;
+      next += 1;
+      const item = items[index];
+      if (item === undefined) return;
+      try {
+        await createEmployee(item.input, actorUid);
+        results[index] = { rowNumber: item.rowNumber, ok: true, code: null };
+      } catch (error) {
+        results[index] = {
+          rowNumber: item.rowNumber,
+          ok: false,
+          code: error instanceof AppError ? error.code : 'UNKNOWN',
+        };
+      }
+      done += 1;
+      options.onProgress?.(done, items.length);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}

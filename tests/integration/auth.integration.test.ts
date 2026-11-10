@@ -108,7 +108,7 @@ describe('sign in / sign out (FR-AUTH-01, 03)', () => {
     const uid = await provision('hr@example.test');
     await auth.signIn('hr@example.test', PASSWORD);
     const user = await waitForAuth((u) => u !== null);
-    expect(user).toEqual({ uid, email: 'hr@example.test' });
+    expect(user).toEqual({ uid, email: 'hr@example.test', hasPassword: true });
   });
 
   it('signs out, and the listener reports null', async () => {

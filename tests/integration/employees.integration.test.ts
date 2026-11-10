@@ -406,6 +406,87 @@ describe('authorization is enforced by the server, not the UI', () => {
     expect(await count('employees')).toBe(0);
   });
 
+  it('bulk import: creates every valid employee with its reservation, reports progress, and stamps the actor', async () => {
+    const items = Array.from({ length: 25 }, (_, i) => ({
+      rowNumber: i + 2,
+      input: {
+        ...juan,
+        employeeNumber: `BULK-${String(i).padStart(3, '0')}`,
+        fullName: `Person ${String(i)}`,
+      },
+    }));
+    const progress: number[] = [];
+    const results = await employees.createEmployeesBulk(items, hrUid, {
+      concurrency: 4,
+      onProgress: (done) => progress.push(done),
+    });
+    expect(results.every((r) => r.ok && r.code === null)).toBe(true);
+    expect(results.map((r) => r.rowNumber)).toEqual(items.map((i) => i.rowNumber)); // input order
+    expect(progress).toHaveLength(25);
+    expect(Math.max(...progress)).toBe(25);
+    expect(await count('employees')).toBe(25);
+    expect(await count('employeeNumbers')).toBe(25);
+    const stored = await raw('employeeNumbers', 'BULK-007');
+    expect(stored?.employeeId).toBeTruthy();
+    expect(await raw('employees', String(stored?.employeeId))).toMatchObject({
+      employeeNumber: 'BULK-007',
+      createdBy: hrUid,
+      isArchived: false,
+    });
+  });
+
+  it('bulk import: an ID that already exists is reported as a duplicate and the existing employee is untouched', async () => {
+    const existing = await employees.createEmployee(juan, hrUid);
+    const before = await raw('employees', existing);
+    const results = await employees.createEmployeesBulk(
+      [
+        { rowNumber: 2, input: { ...juan, fullName: 'Overwrite attempt' } },
+        { rowNumber: 3, input: { ...juan, employeeNumber: 'emp-0042', fullName: 'Case variant' } },
+        { rowNumber: 4, input: { ...juan, employeeNumber: 'NEW-1', fullName: 'Fine' } },
+      ],
+      hrUid,
+    );
+    expect(results.map((r) => [r.rowNumber, r.ok, r.code])).toEqual([
+      [2, false, 'DUPLICATE_EMPLOYEE_NUMBER'],
+      [3, false, 'DUPLICATE_EMPLOYEE_NUMBER'],
+      [4, true, null],
+    ]);
+    expect(await raw('employees', existing)).toEqual(before);
+    expect(await count('employees')).toBe(2);
+  });
+
+  it('bulk import: the same ID twice in one concurrent batch yields exactly one employee', async () => {
+    const results = await employees.createEmployeesBulk(
+      Array.from({ length: 6 }, (_, i) => ({
+        rowNumber: i + 2,
+        input: { ...juan, employeeNumber: 'RACE-1', fullName: `Racer ${String(i)}` },
+      })),
+      hrUid,
+      { concurrency: 6 },
+    );
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => r.code === 'DUPLICATE_EMPLOYEE_NUMBER')).toHaveLength(5);
+    expect(await count('employees')).toBe(1);
+    expect(await count('employeeNumbers')).toBe(1);
+  });
+
+  it('bulk import: a deactivated user creates nothing, and every row reports PERMISSION_DENIED', async () => {
+    await seedUserProfile(rulesEnv, hrUid, { email: 'hr@example.test', isActive: false });
+    const results = await employees.createEmployeesBulk(
+      [
+        { rowNumber: 2, input: juan },
+        { rowNumber: 3, input: { ...juan, employeeNumber: 'X-2' } },
+      ],
+      hrUid,
+    );
+    expect(results.map((r) => r.code)).toEqual(['PERMISSION_DENIED', 'PERMISSION_DENIED']);
+    expect(await count('employees')).toBe(0);
+  });
+
+  it('bulk import: an empty list is a no-op', async () => {
+    expect(await employees.createEmployeesBulk([], hrUid)).toEqual([]);
+  });
+
   it('uses the demo project and emulators only', () => {
     expect(firebase.getFirebase().app.options.projectId).toBe(PROJECT_ID);
   });

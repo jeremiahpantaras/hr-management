@@ -1,4 +1,4 @@
-import { Plus, Users } from 'lucide-react';
+import { Download, Plus, Upload, Users } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -30,7 +30,9 @@ import {
 } from '@/domain/employeeList';
 import { appErrorMessage, errorCodeLabel } from '@/domain/errors';
 import { EmployeeActionsMenu } from '@/features/employees/EmployeeActionsMenu';
+import { EmployeeExportDialog } from '@/features/employees/EmployeeExportDialog';
 import { EmployeeFormDialog } from '@/features/employees/EmployeeFormDialog';
+import { EmployeeImportDialog } from '@/features/employees/EmployeeImportDialog';
 import {
   useArchiveEmployee,
   useEmployees,
@@ -128,6 +130,9 @@ export function EmployeesPage() {
     setFormOpen(true);
   }
   const [archiveTarget, setArchiveTarget] = useState<Employee | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const everyone = useMemo(() => sortEmployees(all ?? [], DEFAULT_SORT), [all]);
 
   async function confirmArchive(): Promise<void> {
     if (!archiveTarget) return;
@@ -261,14 +266,35 @@ export function EmployeesPage() {
         title="Employees"
         description="Manage employee records, search and archive."
         actions={
-          <Button
-            onClick={() => {
-              openForm(null);
-            }}
-          >
-            <Plus aria-hidden="true" />
-            Add employee
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setImportOpen(true);
+              }}
+            >
+              <Upload aria-hidden="true" />
+              Import
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={all === undefined}
+              onClick={() => {
+                setExportOpen(true);
+              }}
+            >
+              <Download aria-hidden="true" />
+              Export
+            </Button>
+            <Button
+              onClick={() => {
+                openForm(null);
+              }}
+            >
+              <Plus aria-hidden="true" />
+              Add employee
+            </Button>
+          </>
         }
       />
 
@@ -338,6 +364,14 @@ export function EmployeesPage() {
           />
         </div>
       ) : null}
+
+      <EmployeeImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <EmployeeExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        currentView={filtered}
+        everyone={everyone}
+      />
 
       <EmployeeFormDialog open={formOpen} onOpenChange={setFormOpen} employee={formEmployee} />
 

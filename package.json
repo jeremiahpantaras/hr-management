@@ -32,6 +32,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
+    "fflate": "^0.8.2",
     "firebase": "^13.2.0",
     "lucide-react": "^1.70.0",
     "radix-ui": "^1.8.1",
