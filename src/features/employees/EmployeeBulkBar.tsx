@@ -179,7 +179,7 @@ export function EmployeeBulkBar({
           if (!open) setConfirm(null);
         }}
         title={`Archive ${plural(active.length, 'employee', 'employees')}?`}
-        description="Their leave history is kept and appears in reports, but they won't be available when allocating credits or recording leave. You can restore them at any time."
+        description="Their leave history is kept and appears in reports, but they won't be available when allocating days or recording leave. You can restore them at any time."
         confirmLabel={`Archive ${String(active.length)}`}
         onConfirm={() => run('archive', active, 'Archived')}
       />
@@ -189,7 +189,7 @@ export function EmployeeBulkBar({
           if (!open) setConfirm(null);
         }}
         title={`Restore ${plural(archived.length, 'employee', 'employees')}?`}
-        description="They become available again for new credits and leave records."
+        description="They become available again for new days and leave records."
         confirmLabel={`Restore ${String(archived.length)}`}
         onConfirm={() => run('restore', archived, 'Restored')}
       />

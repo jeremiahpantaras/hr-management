@@ -2,7 +2,7 @@ import { StatusBadge } from '@/components/data/StatusBadge';
 import { transactionKind } from '@/domain/ledgerDisplay';
 import type { LeaveTransaction } from '@/types/models';
 
-/** Allocation (pink) · Usage (neutral) · Reversal (warning) — text always present (UI §7). */
+/** Allocation and Edit (pink) · Usage (neutral) · Reversal (warning) — text always present (UI §7). */
 export function TransactionTypeBadge({ entry }: { readonly entry: LeaveTransaction }) {
   const kind = transactionKind(entry);
   if (kind === 'Allocation')
@@ -12,6 +12,12 @@ export function TransactionTypeBadge({ entry }: { readonly entry: LeaveTransacti
       </StatusBadge>
     );
   if (kind === 'Reversal') return <StatusBadge tone="warning">Reversal</StatusBadge>;
+  if (kind === 'Edit')
+    return (
+      <StatusBadge tone="pink" icon={false}>
+        Edit
+      </StatusBadge>
+    );
   return <StatusBadge icon={false}>Usage</StatusBadge>;
 }
 

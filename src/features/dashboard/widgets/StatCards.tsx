@@ -55,7 +55,7 @@ export function StatCards({ year }: { readonly year: number }) {
           loading={employees.isPending}
         />
         <StatCard
-          label="Total Credits"
+          label="Total Days"
           icon={CalendarPlus}
           value={formatDays(credits)}
           caption={String(year)}
@@ -65,8 +65,8 @@ export function StatCards({ year }: { readonly year: number }) {
           label="Total Used"
           icon={CalendarMinus}
           value={formatDays(used)}
-          caption={credits > 0 ? `${String(usedPercent)}% of credits` : String(year)}
-          progress={{ value: used, max: credits, label: 'Share of credits used' }}
+          caption={credits > 0 ? `${String(usedPercent)}% of days` : String(year)}
+          progress={{ value: used, max: credits, label: 'Share of days used' }}
           loading={aggregate.isPending}
         />
         <StatCard

@@ -21,7 +21,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/employees', label: 'Employees', icon: Users },
-  { to: '/leave-credits', label: 'Leave Credits', icon: CalendarPlus },
+  { to: '/leave-credits', label: 'Leave Days', icon: CalendarPlus },
   { to: '/leave-usage', label: 'Leave Usage', icon: CalendarMinus },
   { to: '/leave-history', label: 'Leave History', icon: History },
   { to: '/reports', label: 'Reports', icon: FileSpreadsheet },

@@ -83,7 +83,7 @@ describe('buildReport — the Juan-2026 reference data', () => {
   });
 
   it('describes the totals for the preview', () => {
-    expect(describeTotals(model().totals)).toBe('Credits 10 · Used 5 · Remaining 5');
+    expect(describeTotals(model().totals)).toBe('Total 10 · Used 5 · Remaining 5');
   });
 });
 

@@ -18,6 +18,10 @@ import type { Employee, LeaveBalance, LeaveTransaction } from '@/types/models';
 vi.mock('@/services/employees.service');
 vi.mock('@/services/leaveBalances.service');
 vi.mock('@/services/leaveLedger.service');
+const downloadHistory = vi.fn<(rows: unknown[], options: unknown) => string>();
+vi.mock('@/utils/excel/leaveHistoryExcel', () => ({
+  downloadHistory: (rows: unknown[], options: unknown) => downloadHistory(rows, options),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const YEAR = new Date().getFullYear();
@@ -222,19 +226,19 @@ describe('Record usage form (UI §6.10)', () => {
     await userEvent.clear(within(dialog).getByLabelText(/^Days to deduct/));
     await userEvent.type(within(dialog).getByLabelText(/^Days to deduct/), '8');
     expect(
-      await within(dialog).findByText('Not enough credits: 7 available, 8 requested.'),
+      await within(dialog).findByText('Not enough days: 7 available, 8 requested.'),
     ).toBeInTheDocument();
     expect(submitButton(dialog)).toBeDisabled();
   });
 
-  it('TC-LU-14: with no balance it says so, links to Allocate credits, and disables submit', async () => {
+  it('TC-LU-14: with no balance it says so, links to Allocate days, and disables submit', async () => {
     vi.mocked(balancesService.getBalance).mockResolvedValue(null);
     const dialog = await openRecord();
     await fillValid(dialog, '1');
     expect(
-      await within(dialog).findByText(/No credits have been allocated to this employee for/),
+      await within(dialog).findByText(/No days have been allocated to this employee for/),
     ).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: 'Allocate credits' })).toHaveAttribute(
+    expect(within(dialog).getByRole('link', { name: 'Allocate days' })).toHaveAttribute(
       'href',
       `/leave-credits?year=${String(YEAR)}`,
     );
@@ -295,7 +299,7 @@ describe('Record usage form (UI §6.10)', () => {
     await fillValid(dialog, '2');
     await userEvent.click(submitButton(dialog));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'Not enough credits: 1 available, 2 requested.',
+      'Not enough days: 1 available, 2 requested.',
     );
     expect(toast.success).not.toHaveBeenCalled();
   });
@@ -528,6 +532,7 @@ describe('Leave History (UI §6.11)', () => {
     dateTo: null,
     creditsDelta: 10,
     usedDelta: 0,
+    resultingTotalUsed: 0,
     remarks: 'Annual',
   });
   const reversed = usage('V'.repeat(20), d('02', '10'), d('02', '11'), 2, {
@@ -538,6 +543,7 @@ describe('Leave History (UI §6.11)', () => {
     reversesType: 'USAGE',
     reversesTransactionId: 'V'.repeat(20),
     usedDelta: -2,
+    resultingTotalUsed: 0,
     remarks: 'Wrong dates',
   });
 
@@ -556,10 +562,136 @@ describe('Leave History (UI §6.11)', () => {
     await within(table).findAllByText('Juan Dela Cruz');
     expect(within(table).getByText('Allocation')).toBeInTheDocument();
     expect(within(table).getByText('Reversal')).toBeInTheDocument();
-    expect(within(table).getByText('+10 credits')).toBeInTheDocument();
+    expect(within(table).getByText('+10 days')).toBeInTheDocument();
     expect(within(table).getByText('+2 days (reversal)')).toBeInTheDocument();
     expect(within(table).getByText('Reversed')).toBeInTheDocument();
     expect(within(table).getByText(/Reversal of …VVVVVV/)).toBeInTheDocument();
+  });
+
+  it('has a "Remaining days" column: what the employee had left right after each entry', async () => {
+    const table = await openHistory();
+    await within(table).findAllByText('Juan Dela Cruz');
+    const header = within(table).getByRole('columnheader', { name: 'Remaining days' });
+    const index = within(table).getAllByRole('columnheader').indexOf(header);
+    const remaining = (name: RegExp) =>
+      within(within(table).getByText(name).closest('tr')!).getAllByRole('cell')[index - 1]
+        ?.textContent;
+    // allocation 10 → 10 left; usage of 2 → 8 left; its reversal → back to 10
+    expect(remaining(/^Allocation$/)).toBe('10');
+    expect(remaining(/Reversal of …VVVVVV/)).toBe('10');
+    const cells = within(table)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => within(row).getAllByRole('cell')[index - 1]?.textContent);
+    expect(cells.sort()).toEqual(['10', '10', '8']);
+  });
+
+  describe('Export', () => {
+    it('Export is only on the history page, and exports the whole year with the chosen paper', async () => {
+      vi.mocked(ledgerService.getLedgerYear).mockResolvedValue([allocation, reversal, reversed]);
+      downloadHistory.mockReturnValue('Leave-History_2026_Letter_x.xlsx');
+      const table = await openHistory();
+      await within(table).findAllByText('Juan Dela Cruz');
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Export leave history' });
+      expect(dialog).toHaveTextContent(`Every ${String(YEAR)} entry, newest first.`);
+      await userEvent.click(within(dialog).getByRole('radio', { name: /Letter/ }));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Download Excel' }));
+      await waitFor(() => {
+        expect(downloadHistory).toHaveBeenCalledTimes(1);
+      });
+      expect(ledgerService.getLedgerYear).toHaveBeenCalledWith(YEAR, undefined);
+      const [rows, options] = downloadHistory.mock.calls[0]!;
+      expect(rows).toHaveLength(3);
+      expect(options).toEqual({ paper: 'LETTER', orientation: 'landscape', year: YEAR });
+      expect(toast.success).toHaveBeenCalledWith(
+        'Exported 3 entries to Leave-History_2026_Letter_x.xlsx.',
+      );
+    });
+
+    it('applies the current filters to the whole year', async () => {
+      vi.mocked(ledgerService.getLedgerYear).mockResolvedValue([allocation, reversal, reversed]);
+      downloadHistory.mockReturnValue('f.xlsx');
+      const table = await openHistory();
+      await within(table).findAllByText('Juan Dela Cruz');
+      await userEvent.click(screen.getByRole('combobox', { name: 'Type' }));
+      await userEvent.click(await screen.findByRole('option', { name: 'Allocation' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Export leave history' });
+      expect(dialog).toHaveTextContent('that matches your current filters');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Download Excel' }));
+      await waitFor(() => {
+        expect(downloadHistory).toHaveBeenCalled();
+      });
+      expect(downloadHistory.mock.calls[0]?.[0]).toHaveLength(1);
+    });
+
+    it('says so instead of downloading an empty file', async () => {
+      vi.mocked(ledgerService.getLedgerYear).mockResolvedValue([]);
+      const table = await openHistory();
+      await within(table).findAllByText('Juan Dela Cruz');
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Export leave history' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Download Excel' }));
+      await waitFor(() => {
+        expect(toast.info).toHaveBeenCalledWith(
+          'There are no entries to export with these filters.',
+        );
+      });
+      expect(downloadHistory).not.toHaveBeenCalled();
+    });
+
+    it('reports a failure to load or build the file', async () => {
+      vi.mocked(ledgerService.getLedgerYear).mockRejectedValue(new AppError('OFFLINE'));
+      const table = await openHistory();
+      await within(table).findAllByText('Juan Dela Cruz');
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Export leave history' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Download Excel' }));
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith("You're offline. Reconnect and try again.");
+      });
+    });
+
+    it('Leave Usage has no Export button', async () => {
+      vi.mocked(ledgerService.listLedgerPage).mockResolvedValue({
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+      });
+      renderRoutes('/leave-usage');
+      await screen.findByRole('heading', { level: 1, name: 'Leave Usage' });
+      expect(screen.queryByRole('button', { name: 'Export' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows an edit of the allocated days: Edit type, signed effect, who and the reason, no Reverse', async () => {
+    const edit: LeaveTransaction = usage('E'.repeat(20), d('01', '01'), d('01', '01'), 2, {
+      transactionType: 'ADJUSTMENT',
+      dateFrom: null,
+      dateTo: null,
+      creditsDelta: 2,
+      usedDelta: 0,
+      resultingTotalCredits: 12,
+      resultingTotalUsed: 0,
+      remarks: 'Corrected after audit',
+    });
+    vi.mocked(ledgerService.listLedgerPage).mockResolvedValue({
+      items: [edit],
+      nextCursor: null,
+      hasMore: false,
+    });
+    renderRoutes('/leave-history');
+    const table = await screen.findByRole('table', { name: `Leave history ${String(YEAR)}` });
+    const row = (await within(table).findByText('+2 days (edit)')).closest('tr')!;
+    expect(within(row).getByText('Edit')).toBeInTheDocument();
+    expect(within(row).getByText('Corrected after audit')).toBeInTheDocument();
+    expect(within(row).getByText('Maria Santos')).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /^Reverse / })).not.toBeInTheDocument();
+    await userEvent.click(row);
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).getByRole('heading', { name: 'Edit' })).toBeInTheDocument();
+    expect(within(sheet).getByText('Total days').closest('div')).toHaveTextContent('10 → 12');
   });
 
   it('TC-REV-13: no Reverse action on reversal rows or already-reversed rows', async () => {

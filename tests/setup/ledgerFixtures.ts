@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 
 import {
+  buildAdjustmentEntry,
   buildAllocationEntry,
   buildReversalEntry,
   buildUsageEntry,
@@ -165,6 +166,33 @@ export function usagePair(opts: {
     dateFrom: opts.dateFrom,
     dateTo: opts.dateTo,
     balance: opts.balance,
+    actor: ACTOR,
+  });
+  return {
+    id: opts.id,
+    ledger: { ...built.entry, createdAt: serverTimestamp() },
+    balanceId: built.entry.balanceId,
+    balance: balanceData(built.entry, built.balance, opts.id, false),
+    isNewBalance: false,
+    domain: { ...built.entry, id: opts.id, createdAt: null },
+  };
+}
+
+/** Editing an employee's allocated days: the new TOTAL replaces the old one. */
+export function adjustmentPair(opts: {
+  id: string;
+  newTotal: number;
+  balance: BalanceTotals;
+  year?: number;
+  emp?: Employee;
+  reason?: string;
+}): Pair {
+  const built = buildAdjustmentEntry({
+    employee: opts.emp ?? employee,
+    year: opts.year ?? 2026,
+    newTotal: opts.newTotal,
+    balance: opts.balance,
+    reason: opts.reason ?? 'Corrected after review',
     actor: ACTOR,
   });
   return {

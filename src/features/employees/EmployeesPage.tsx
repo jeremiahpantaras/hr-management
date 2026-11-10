@@ -466,7 +466,7 @@ export function EmployeesPage() {
           if (!open) setArchiveTarget(null);
         }}
         title={`Archive ${archiveTarget?.fullName ?? 'employee'}?`}
-        description="Their leave history is kept and appears in reports, but they won't be available when allocating credits or recording leave. You can restore them at any time."
+        description="Their leave history is kept and appears in reports, but they won't be available when allocating days or recording leave. You can restore them at any time."
         confirmLabel="Archive employee"
         onConfirm={confirmArchive}
       />

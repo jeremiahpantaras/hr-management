@@ -18,6 +18,7 @@ import {
 import { LEDGER_PAGE_SIZE, type TransactionType } from '@/domain/constants';
 import { AppError } from '@/domain/errors';
 import {
+  buildAdjustmentEntry,
   buildAllocationEntry,
   buildReversalEntry,
   buildUsageEntry,
@@ -95,6 +96,17 @@ export interface UsageRequest extends AllocationRequest {
   readonly dateTo: string;
 }
 
+export interface AdjustmentRequest {
+  /** Client-generated Firestore auto-id: the idempotency key. */
+  readonly transactionId: string;
+  readonly employeeId: string;
+  readonly year: number;
+  /** The employee's new TOTAL allocated days for the year. */
+  readonly newTotal: number;
+  readonly reason: string;
+  readonly actor: Actor;
+}
+
 export interface ReversalRequest {
   readonly originalTransactionId: string;
   readonly reason: string;
@@ -138,7 +150,10 @@ function duplicateResult(transactionId: string, data: DocumentData): LedgerResul
 }
 
 /** Reads everything an allocation / usage needs, inside the transaction. */
-async function readContext(transaction: Transaction, request: AllocationRequest) {
+async function readContext(
+  transaction: Transaction,
+  request: Pick<AllocationRequest, 'employeeId' | 'year'>,
+) {
   const { db } = getFirebase();
   const [employeeSnap, balanceSnap] = [
     await transaction.get(doc(db, COLLECTIONS.employees, request.employeeId)),
@@ -255,6 +270,47 @@ export async function recordUsage(request: UsageRequest): Promise<LedgerResult> 
   }
 }
 
+/**
+ * Edits an employee's allocated days for a year (an ADJUSTMENT entry): the new total replaces the
+ * old one, and the entry keeps who changed it, when, and the reason. Needs an existing balance and
+ * can never go below the days already used.
+ */
+export async function recordAdjustment(request: AdjustmentRequest): Promise<LedgerResult> {
+  const { db } = getFirebase();
+  const entryRef = doc(db, COLLECTIONS.leaveTransactions, request.transactionId);
+  try {
+    return await retryOnDenial(() =>
+      mapped(() =>
+        runTransaction(
+          db,
+          async (transaction) => {
+            const existing = await transaction.get(entryRef);
+            if (existing.exists()) return duplicateResult(request.transactionId, existing.data());
+            const context = await readContext(transaction, request);
+            const built = buildAdjustmentEntry({
+              employee: context.employee,
+              year: request.year,
+              newTotal: request.newTotal,
+              reason: request.reason,
+              balance: context.balance,
+              actor: request.actor,
+            });
+            writeEntryAndBalance(transaction, request.transactionId, built, context.balanceExists);
+            return {
+              status: 'created',
+              transactionId: request.transactionId,
+              balance: built.balance,
+            };
+          },
+          TRANSACTION_OPTIONS,
+        ),
+      ),
+    );
+  } catch (error) {
+    throw mapFirebaseError(error);
+  }
+}
+
 /** Reverses an ALLOCATION or USAGE (D-04). The reversal id is deterministic (`rev_{id}`, R-02). */
 export async function reverseEntry(request: ReversalRequest): Promise<LedgerResult> {
   const { db } = getFirebase();
@@ -317,7 +373,8 @@ export type LedgerCursor = QueryDocumentSnapshot<DocumentData>;
 export interface LedgerQuery {
   readonly year: number;
   readonly employeeId?: string;
-  readonly transactionType?: TransactionType;
+  /** One type, or several (the allocation history shows ALLOCATION and ADJUSTMENT together). */
+  readonly transactionType?: TransactionType | readonly TransactionType[];
   readonly pageSize?: number;
   readonly cursor?: LedgerCursor | null;
 }
@@ -341,7 +398,9 @@ export async function listLedgerPage(params: LedgerQuery): Promise<LedgerPage> {
   try {
     const constraints: QueryConstraint[] = [where('leaveYear', '==', params.year)];
     if (params.employeeId) constraints.push(where('employeeId', '==', params.employeeId));
-    if (params.transactionType) {
+    if (Array.isArray(params.transactionType)) {
+      constraints.push(where('transactionType', 'in', params.transactionType));
+    } else if (params.transactionType) {
       constraints.push(where('transactionType', '==', params.transactionType));
     }
     constraints.push(orderBy('createdAt', 'desc'));

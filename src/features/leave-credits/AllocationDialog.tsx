@@ -48,7 +48,7 @@ interface AllocationDialogProps {
 }
 
 /**
- * Allocate credits (UI spec §6.8). A fresh idempotency key is created every time the dialog opens
+ * Allocate days (UI spec §6.8). A fresh idempotency key is created every time the dialog opens
  * (the content is remounted per open), so a retry reuses it and a deliberate second entry does not
  * (D-05). Only active employees can be chosen (BR-CR-04).
  */
@@ -116,7 +116,7 @@ function AllocationDialogContent({
         remarks: values.remarks,
       });
       toast.success(
-        `Added ${formatDays(values.days)} credits for ${employeeName} (${String(values.year)}). New total: ${formatDays(result.balance.totalCredits)}.`,
+        `Added ${formatDays(values.days)} days for ${employeeName} (${String(values.year)}). New total: ${formatDays(result.balance.totalCredits)}.`,
       );
       onSaved();
     } catch (error) {
@@ -127,9 +127,9 @@ function AllocationDialogContent({
   return (
     <DialogContent size="md" dismissible={!pending}>
       <DialogHeader>
-        <DialogTitle>Allocate credits</DialogTitle>
+        <DialogTitle>Allocate days</DialogTitle>
         <DialogDescription>
-          Credits are added as a new entry; earlier credits are never overwritten.
+          Days are added as a new entry; earlier days are never overwritten.
         </DialogDescription>
       </DialogHeader>
       <form
@@ -187,7 +187,7 @@ function AllocationDialogContent({
             )}
           />
           <DaysField
-            label="Credits to add"
+            label="Days to add"
             required
             error={errors.days?.message}
             disabled={pending}
@@ -215,7 +215,7 @@ function AllocationDialogContent({
           </FormField>
         </DialogBody>
         <DialogFooter>
-          <FormFooter submitLabel="Allocate credits" onCancel={onRequestClose} pending={pending} />
+          <FormFooter submitLabel="Allocate days" onCancel={onRequestClose} pending={pending} />
         </DialogFooter>
       </form>
     </DialogContent>

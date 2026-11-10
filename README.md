@@ -75,6 +75,16 @@ every row _before_ saving anything, and then creates only the valid rows — exi
 duplicate Employee IDs (any case, archived included) are skipped. Limits: 500 employees and 5 MB per file. An
 exported file can be imported again.
 
+## Leave days: editing and the history log
+
+Everything is counted in **days** (1 day = 1, half a day = 0.5). **Leave Days → Edit** (or **Edit days** on an employee's page)
+changes an employee's total allocated days for a year, up or down — never below the days they have already used — and
+asks for a reason. Nothing is overwritten: each change is added to **Leave History** as an **Edit** entry showing
+the old and new total, the reason, **who** made it and the **date and time**. **Leave History** also has a
+**Remaining days** column (what the employee had left right after each entry) and an **Export** button that
+downloads the whole year's history — respecting your filters — as an Excel file for Letter or A4. If you change
+`firestore.rules`, redeploy them (`firebase deploy --only firestore:rules`), otherwise saving an edit is refused.
+
 ## Leave credits report (Excel)
 
 **Reports** produces the sheet your HR team already uses, one row per employee: **NAME · POSITION · LOCATION · TOTAL

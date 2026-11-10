@@ -16,9 +16,11 @@ import {
   findUsageForOverlap,
   getLedgerYear,
   listLedgerPage,
+  recordAdjustment,
   recordAllocation,
   recordUsage,
   reverseEntry,
+  type AdjustmentRequest,
   type AllocationRequest,
   type LedgerCursor,
   type LedgerPage,
@@ -44,7 +46,7 @@ export const dashboardKeysRoot = ['dashboard'] as const;
 export interface LedgerFilters {
   readonly year: number;
   readonly employeeId?: string;
-  readonly transactionType?: TransactionType;
+  readonly transactionType?: TransactionType | readonly TransactionType[];
 }
 
 /** The signed-in user as a ledger actor ("Recorded by" snapshot). Throws if there is none. */
@@ -116,6 +118,7 @@ function useInvalidateLedgerEffects() {
 
 export type AllocationVariables = Omit<AllocationRequest, 'actor'>;
 export type UsageVariables = Omit<UsageRequest, 'actor'>;
+export type AdjustmentVariables = Omit<AdjustmentRequest, 'actor'>;
 
 export function useRecordAllocation(): UseMutationResult<LedgerResult, Error, AllocationVariables> {
   const actor = useActor();
@@ -123,6 +126,16 @@ export function useRecordAllocation(): UseMutationResult<LedgerResult, Error, Al
   return useMutation({
     mutationFn: (variables: AllocationVariables) =>
       recordAllocation({ ...variables, actor: requireActor(actor) }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRecordAdjustment(): UseMutationResult<LedgerResult, Error, AdjustmentVariables> {
+  const actor = useActor();
+  const invalidate = useInvalidateLedgerEffects();
+  return useMutation({
+    mutationFn: (variables: AdjustmentVariables) =>
+      recordAdjustment({ ...variables, actor: requireActor(actor) }),
     onSuccess: invalidate,
   });
 }

@@ -155,8 +155,8 @@ describe('Dashboard figures (TC-DASH-01/03, BR-CALC-03, BR-EMP-08)', () => {
     };
     expect(await value('Total Employees')).toContain('5');
     expect(await value('Active Employees')).toMatch(/4.*of 5 total/);
-    expect(await value('Total Credits')).toContain('22');
-    expect(await value('Total Used')).toMatch(/13\.5.*61% of credits/);
+    expect(await value('Total Days')).toContain('22');
+    expect(await value('Total Used')).toMatch(/13\.5.*61% of days/);
     expect(await value('Total Unused')).toContain('8.5');
     expect(balancesService.getYearBalances).toHaveBeenCalledWith(YEAR);
   });
@@ -216,15 +216,15 @@ describe('Recent lists (TC-DASH-06)', () => {
       '[aria-busy]',
     )!;
     await within(recent).findByText('−2 days');
-    expect(within(recent).getByText('+10 credits')).toBeInTheDocument();
+    expect(within(recent).getByText('+10 days')).toBeInTheDocument();
     expect(within(recent).getByRole('link', { name: 'View all' })).toHaveAttribute(
       'href',
       `/leave-history?year=${String(YEAR)}`,
     );
-    const alloc = (await screen.findByText('Recent credit allocations')).closest<HTMLElement>(
+    const alloc = (await screen.findByText('Recent allocations')).closest<HTMLElement>(
       '[aria-busy]',
     )!;
-    await within(alloc).findByText('+10 credits');
+    await within(alloc).findByText('+10 days');
     expect(within(alloc).getByRole('link', { name: 'View all' })).toHaveAttribute(
       'href',
       `/leave-credits?tab=history&year=${String(YEAR)}`,
@@ -260,15 +260,15 @@ describe('Balance overview', () => {
 });
 
 describe('States (TC-DASH-07/08)', () => {
-  it('TC-DASH-07: a year with no credits shows the empty card with an Allocate credits action', async () => {
+  it('TC-DASH-07: a year with no credits shows the empty card with an Allocate days action', async () => {
     vi.mocked(balancesService.getYearBalances).mockResolvedValue([]);
     renderDashboard();
     expect(
-      await screen.findByText(`No leave credits have been allocated for ${String(YEAR)}.`),
+      await screen.findByText(`No leave days have been allocated for ${String(YEAR)}.`),
     ).toBeInTheDocument();
-    const buttons = screen.getAllByRole('button', { name: 'Allocate credits' });
+    const buttons = screen.getAllByRole('button', { name: 'Allocate days' });
     await userEvent.click(buttons[0]!);
-    expect(await screen.findByRole('dialog', { name: 'Allocate credits' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Allocate days' })).toBeInTheDocument();
   });
 
   it('TC-DASH-08: when one widget fails the others still render, and its Retry works', async () => {
@@ -293,7 +293,7 @@ describe('States (TC-DASH-07/08)', () => {
     expect(
       await screen.findByRole('status', { name: 'Loading Recent leave transactions' }),
     ).toBeInTheDocument();
-    expect(card('Recent credit allocations')).toHaveAttribute('aria-busy', 'true');
+    expect(card('Recent allocations')).toHaveAttribute('aria-busy', 'true');
   });
 
   it('Refresh refetches the figures', async () => {

@@ -59,8 +59,8 @@ export function DashboardPage() {
         {noCredits ? (
           <Card>
             <EmptyState
-              title={`No leave credits have been allocated for ${String(year)}.`}
-              description="Allocate credits to employees to start tracking leave."
+              title={`No leave days have been allocated for ${String(year)}.`}
+              description="Allocate days to employees to start tracking leave."
               action={
                 <Button
                   onClick={() => {
@@ -68,7 +68,7 @@ export function DashboardPage() {
                   }}
                 >
                   <Plus aria-hidden="true" />
-                  Allocate credits
+                  Allocate days
                 </Button>
               }
             />

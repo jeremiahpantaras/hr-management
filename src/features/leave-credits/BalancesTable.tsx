@@ -27,6 +27,7 @@ import { filterEmployees, paginate, sortEmployees, DEFAULT_SORT } from '@/domain
 import { appErrorMessage } from '@/domain/errors';
 import { sumTotals } from '@/domain/summary';
 import { useEmployees } from '@/features/employees/hooks/useEmployees';
+import type { EditDaysTarget } from '@/features/leave-credits/EditDaysDialog';
 import { useBalancesForEmployees } from '@/features/leave-credits/hooks/useBalances';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { Employee, LeaveBalance } from '@/types/models';
@@ -34,13 +35,15 @@ import type { Employee, LeaveBalance } from '@/types/models';
 interface BalancesTableProps {
   readonly year: number;
   readonly onAllocate: (employee: Employee) => void;
+  /** Edit the employee's allocated days (only offered when they have days for the year). */
+  readonly onEdit: (target: EditDaysTarget) => void;
 }
 
 /**
- * Leave Credits → Balances (UI spec §6.7, DB §8.4): employees 25 per page with their year totals,
+ * Leave Days → Balances (UI spec §6.7, DB §8.4): employees 25 per page with their year totals,
  * Employees without credits show "—".
  */
-export function BalancesTable({ year, onAllocate }: BalancesTableProps) {
+export function BalancesTable({ year, onAllocate, onEdit }: BalancesTableProps) {
   const employeesQuery = useEmployees();
   const [searchText, setSearchText] = useState('');
   const search = useDebouncedValue(searchText);
@@ -115,13 +118,13 @@ export function BalancesTable({ year, onAllocate }: BalancesTableProps) {
         />
       ) : (
         <div className="rounded-card border bg-surface shadow-card">
-          <ScrollRegion label={`Leave credits ${String(year)}`}>
+          <ScrollRegion label={`Leave days ${String(year)}`}>
             <Table>
-              <TableCaption>{`Leave credits for ${String(year)}`}</TableCaption>
+              <TableCaption>{`Leave days for ${String(year)}`}</TableCaption>
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
-                  <TableHead className="text-right">Total credits</TableHead>
+                  <TableHead className="text-right">Total days</TableHead>
                   <TableHead className="text-right">Used</TableHead>
                   <TableHead className="text-right">Unused</TableHead>
                   <TableHead className="text-right">
@@ -175,12 +178,30 @@ export function BalancesTable({ year, onAllocate }: BalancesTableProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  aria-label={`Allocate credits to ${employee.fullName}`}
+                                  aria-label={`Allocate days to ${employee.fullName}`}
                                   onClick={() => {
                                     onAllocate(employee);
                                   }}
                                 >
                                   Allocate
+                                </Button>
+                              )}
+                              {employee.isArchived || noCredits ? null : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  aria-label={`Edit days for ${employee.fullName}`}
+                                  onClick={() => {
+                                    onEdit({
+                                      employee,
+                                      balance: {
+                                        totalCredits: totals.totalCredits,
+                                        totalUsed: totals.totalUsed,
+                                      },
+                                    });
+                                  }}
+                                >
+                                  Edit
                                 </Button>
                               )}
                               <Button variant="ghost" size="sm" asChild>
@@ -209,7 +230,7 @@ export function BalancesTable({ year, onAllocate }: BalancesTableProps) {
               }
               description={
                 (employeesQuery.data ?? []).length === 0
-                  ? 'Add employees first, then allocate their leave credits.'
+                  ? 'Add employees first, then allocate their leave days.'
                   : undefined
               }
             />
@@ -227,7 +248,7 @@ export function BalancesTable({ year, onAllocate }: BalancesTableProps) {
         </div>
       )}
       {!loading && (balancesQuery.data ?? []).length === 0 && page.items.length > 0 ? (
-        <p className="text-sm text-fg-muted">No credits have been allocated for {year}.</p>
+        <p className="text-sm text-fg-muted">No days have been allocated for {year}.</p>
       ) : null}
     </div>
   );

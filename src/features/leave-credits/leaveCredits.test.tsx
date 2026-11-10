@@ -140,7 +140,7 @@ beforeEach(() => {
 describe('Balances tab (UI §6.7, DB §8.4)', () => {
   it('lists active employees with year totals, "—" for those without credits, and the year caption', async () => {
     renderPage();
-    const table = await screen.findByRole('table', { name: `Leave credits for ${String(YEAR)}` });
+    const table = await screen.findByRole('table', { name: `Leave days for ${String(YEAR)}` });
     await within(table).findByText('Juan Dela Cruz');
     const juanRow = screen.getByText('Juan Dela Cruz').closest('tr')!;
     expect(
@@ -152,7 +152,7 @@ describe('Balances tab (UI §6.7, DB §8.4)', () => {
     expect(within(anaRow).getAllByText('—')).toHaveLength(3);
     expect(screen.queryByText('Mario Santos')).not.toBeInTheDocument(); // archived hidden by default
     expect(
-      screen.getAllByText(new RegExp(`Leave credits for ${String(YEAR)}`)).length,
+      screen.getAllByText(new RegExp(`Leave days for ${String(YEAR)}`)).length,
     ).toBeGreaterThan(0);
     expect(balancesService.getBalancesForEmployees).toHaveBeenCalledWith(['ana', 'juan'], YEAR);
   });
@@ -163,9 +163,7 @@ describe('Balances tab (UI §6.7, DB §8.4)', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Include archived' }));
     const row = (await screen.findByText('Mario Santos')).closest('tr')!;
     expect(within(row).getByText('Archived')).toBeInTheDocument();
-    expect(
-      within(row).queryByRole('button', { name: /Allocate credits to/ }),
-    ).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /Allocate days to/ })).not.toBeInTheDocument();
   });
 
   it('searches by name or employee ID', async () => {
@@ -199,8 +197,8 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
   async function openDialog() {
     renderPage();
     await screen.findByText('Juan Dela Cruz');
-    await userEvent.click(screen.getByRole('button', { name: 'Allocate credits' }));
-    return screen.findByRole('dialog', { name: 'Allocate credits' });
+    await userEvent.click(screen.getByRole('button', { name: 'Allocate days' }));
+    return screen.findByRole('dialog', { name: 'Allocate days' });
   }
   async function pick(dialog: HTMLElement, label: RegExp, option: string | RegExp) {
     await userEvent.click(within(dialog).getByRole('combobox', { name: label }));
@@ -209,20 +207,20 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
 
   it('validates every field with the exact messages', async () => {
     const dialog = await openDialog();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate days' }));
     expect(await within(dialog).findByText('Select an employee.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Enter the number of credits.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Enter the number of days.')).toBeInTheDocument();
     expect(ledgerService.recordAllocation).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['0', 'Credits must be greater than 0.'],
+    ['0', 'Days must be greater than 0.'],
     ['0.3', 'Use whole or half days (0.5).'],
     ['366', 'The maximum is 365 per entry.'],
   ])('rejects %s credits', async (value, message) => {
     const dialog = await openDialog();
-    await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), value);
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
+    await userEvent.type(within(dialog).getByLabelText(/^Days to add/), value);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate days' }));
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
   });
 
@@ -239,7 +237,7 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
     vi.mocked(balancesService.getBalance).mockResolvedValue(balance('juan', 10, 0));
     const dialog = await openDialog();
     await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-    await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '2');
+    await userEvent.type(within(dialog).getByLabelText(/^Days to add/), '2');
     const status = await within(dialog).findByText(/Current total:/);
     expect(status).toHaveTextContent('Current total: 10 → After this allocation: 12 (');
   });
@@ -247,9 +245,9 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
   it('submits once with the session id, then closes with a toast naming the new total', async () => {
     const dialog = await openDialog();
     await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-    await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '2');
+    await userEvent.type(within(dialog).getByLabelText(/^Days to add/), '2');
     await userEvent.type(within(dialog).getByLabelText('Remarks'), '  Top-up ');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate days' }));
     await waitFor(() => {
       expect(ledgerService.recordAllocation).toHaveBeenCalledWith({
         transactionId: expect.stringMatching(/^Tx\d{18}$/) as string,
@@ -261,10 +259,10 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
       });
     });
     expect(toast.success).toHaveBeenCalledWith(
-      `Added 2 credits for Juan Dela Cruz (${String(YEAR)}). New total: 12.`,
+      `Added 2 days for Juan Dela Cruz (${String(YEAR)}). New total: 12.`,
     );
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Allocate credits' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Allocate days' })).not.toBeInTheDocument();
     });
   });
 
@@ -277,15 +275,15 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
     );
     const dialog = await openDialog();
     await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-    await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '1');
-    const submit = within(dialog).getByRole('button', { name: 'Allocate credits' });
+    await userEvent.type(within(dialog).getByLabelText(/^Days to add/), '1');
+    const submit = within(dialog).getByRole('button', { name: 'Allocate days' });
     await userEvent.dblClick(submit);
-    await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '{Enter}{Enter}');
+    await userEvent.type(within(dialog).getByLabelText(/^Days to add/), '{Enter}{Enter}');
     expect(ledgerService.recordAllocation).toHaveBeenCalledTimes(1);
     expect(submit).toBeDisabled();
     release({ status: 'created', transactionId: 'x', balance: { totalCredits: 1, totalUsed: 0 } });
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Allocate credits' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Allocate days' })).not.toBeInTheDocument();
     });
     expect(ledgerService.recordAllocation).toHaveBeenCalledTimes(1);
   });
@@ -294,13 +292,13 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
     renderPage();
     await screen.findByText('Juan Dela Cruz');
     const submitOnce = async () => {
-      await userEvent.click(screen.getByRole('button', { name: 'Allocate credits' }));
-      const dialog = await screen.findByRole('dialog', { name: 'Allocate credits' });
+      await userEvent.click(screen.getByRole('button', { name: 'Allocate days' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Allocate days' });
       await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-      await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '1');
-      await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
+      await userEvent.type(within(dialog).getByLabelText(/^Days to add/), '1');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate days' }));
       await waitFor(() => {
-        expect(screen.queryByRole('dialog', { name: 'Allocate credits' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: 'Allocate days' })).not.toBeInTheDocument();
       });
     };
     await submitOnce();
@@ -315,10 +313,8 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
   it('TC-CR-13: opened from a row, it prefills the employee and keeps the page year', async () => {
     renderPage(`/leave-credits?year=${String(YEAR)}`);
     await screen.findByText('Juan Dela Cruz');
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Allocate credits to Juan Dela Cruz' }),
-    );
-    const dialog = await screen.findByRole('dialog', { name: 'Allocate credits' });
+    await userEvent.click(screen.getByRole('button', { name: 'Allocate days to Juan Dela Cruz' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Allocate days' });
     expect(within(dialog).getByRole('combobox', { name: /^Employee/ })).toHaveTextContent(
       'Juan Dela Cruz',
     );
@@ -331,20 +327,134 @@ describe('Allocation dialog (UI §6.8, TC-CR-09, TC-DUP-03/04)', () => {
     vi.mocked(ledgerService.recordAllocation).mockRejectedValue(new AppError('EMPLOYEE_ARCHIVED'));
     const dialog = await openDialog();
     await pick(dialog, /^Employee/, /Juan Dela Cruz/);
-    await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '1');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate credits' }));
+    await userEvent.type(within(dialog).getByLabelText(/^Days to add/), '1');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Allocate days' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'Juan Dela Cruz is archived. Restore them to continue.',
     );
-    expect(screen.getByRole('dialog', { name: 'Allocate credits' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Allocate days' })).toBeInTheDocument();
     expect(toast.success).not.toHaveBeenCalled();
   });
 
   it('asks before discarding typed changes', async () => {
     const dialog = await openDialog();
-    await userEvent.type(within(dialog).getByLabelText(/^Credits to add/), '3');
+    await userEvent.type(within(dialog).getByLabelText(/^Days to add/), '3');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(await screen.findByRole('dialog', { name: 'Discard changes?' })).toBeInTheDocument();
+  });
+});
+
+describe('Edit days (editing allocated days)', () => {
+  async function openEdit() {
+    renderPage();
+    await screen.findByText('Juan Dela Cruz');
+    await userEvent.click(screen.getByRole('button', { name: 'Edit days for Juan Dela Cruz' }));
+    return screen.findByRole('dialog', { name: 'Edit days' });
+  }
+  const save = (dialog: HTMLElement) => within(dialog).getByRole('button', { name: 'Save change' });
+
+  beforeEach(() => {
+    vi.mocked(ledgerService.recordAdjustment).mockResolvedValue({
+      status: 'created',
+      transactionId: 'x',
+      balance: { totalCredits: 12, totalUsed: 3 },
+    });
+  });
+
+  it('is offered only for active employees who have days for the year', async () => {
+    renderPage();
+    await screen.findByText('Juan Dela Cruz');
+    expect(screen.getByRole('button', { name: 'Edit days for Juan Dela Cruz' })).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: 'Edit days for Ana Reyes' }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('switch', { name: 'Include archived' }));
+    await screen.findByText('Mario Santos');
+    expect(
+      screen.queryByRole('button', { name: 'Edit days for Mario Santos' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the current figures, starts unchanged (Save disabled) and says it is logged', async () => {
+    const dialog = await openEdit();
+    expect(dialog).toHaveTextContent('with your name, the date and the time');
+    expect(dialog).toHaveTextContent(/Current total\s*10/);
+    expect(dialog).toHaveTextContent(/Already used\s*3/);
+    expect(dialog).toHaveTextContent(/Remaining\s*7/);
+    expect(within(dialog).getByLabelText(/^New total days/)).toHaveValue(10);
+    expect(save(dialog)).toBeDisabled();
+  });
+
+  it('previews the change, then saves once with the total, the reason and the idempotency key', async () => {
+    const dialog = await openEdit();
+    await userEvent.clear(within(dialog).getByLabelText(/^New total days/));
+    await userEvent.type(within(dialog).getByLabelText(/^New total days/), '12');
+    expect(await within(dialog).findByRole('status')).toHaveTextContent(
+      'Total: 10 → 12 (+2) · Remaining: 7 → 9',
+    );
+    await userEvent.type(within(dialog).getByLabelText(/^Reason/), '  Corrected after audit ');
+    await userEvent.click(save(dialog));
+    await waitFor(() => {
+      expect(ledgerService.recordAdjustment).toHaveBeenCalledWith({
+        transactionId: expect.stringMatching(/^Tx\d{18}$/) as string,
+        employeeId: 'juan',
+        year: YEAR,
+        newTotal: 12,
+        reason: 'Corrected after audit',
+        actor: { uid: 'hr1', name: 'Maria Santos' },
+      });
+    });
+    expect(ledgerService.recordAdjustment).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenCalledWith(
+      `Changed Juan Dela Cruz’s leave days for ${String(YEAR)} from 10 to 12.`,
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Edit days' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('lowering shows a minus sign; a total below the days already used is refused on the spot', async () => {
+    const dialog = await openEdit();
+    const total = within(dialog).getByLabelText(/^New total days/);
+    await userEvent.clear(total);
+    await userEvent.type(total, '8');
+    expect(await within(dialog).findByRole('status')).toHaveTextContent(
+      'Total: 10 → 8 (−2) · Remaining: 7 → 5',
+    );
+    await userEvent.clear(total);
+    await userEvent.type(total, '2.5');
+    expect(
+      await within(dialog).findByText('The total can’t be lower than the 3 days already used.'),
+    ).toBeInTheDocument();
+    expect(save(dialog)).toBeDisabled();
+    expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('validates the total and the reason with the exact messages', async () => {
+    const dialog = await openEdit();
+    const total = within(dialog).getByLabelText(/^New total days/);
+    await userEvent.clear(total);
+    await userEvent.type(total, '11.25');
+    await userEvent.type(within(dialog).getByLabelText(/^Reason/), 'ab');
+    await userEvent.click(save(dialog));
+    expect(await within(dialog).findByText('Use whole or half days (0.5).')).toBeInTheDocument();
+    expect(within(dialog).getByText('Enter a reason (at least 3 characters).')).toBeInTheDocument();
+    expect(ledgerService.recordAdjustment).not.toHaveBeenCalled();
+  });
+
+  it('shows a server refusal and stays open', async () => {
+    vi.mocked(ledgerService.recordAdjustment).mockRejectedValue(
+      new AppError('BELOW_USED', { details: { used: 5, requested: 4 } }),
+    );
+    const dialog = await openEdit();
+    await userEvent.clear(within(dialog).getByLabelText(/^New total days/));
+    await userEvent.type(within(dialog).getByLabelText(/^New total days/), '12');
+    await userEvent.type(within(dialog).getByLabelText(/^Reason/), 'Audit');
+    await userEvent.click(save(dialog));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      "The total can't be lower than the days already used: 5 used, 4 entered.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
 
@@ -371,7 +481,7 @@ describe('Allocation history tab (UI §6.7, TC-CR-10)', () => {
     return screen.findByRole('table', { name: `Allocation history ${String(YEAR)}` });
   }
 
-  it('lists entries with the effect, who recorded them, and a Reversed badge; queries ALLOCATION for the year', async () => {
+  it('lists entries with the effect, who recorded them, and a Reversed badge; queries allocations and edits for the year', async () => {
     vi.mocked(ledgerService.listLedgerPage).mockResolvedValue({
       items: rows,
       nextCursor: null,
@@ -379,11 +489,11 @@ describe('Allocation history tab (UI §6.7, TC-CR-10)', () => {
     });
     const table = await openHistory();
     await within(table).findAllByText('Juan Dela Cruz');
-    expect(within(table).getByText('+10 credits')).toBeInTheDocument();
+    expect(within(table).getByText('+10 days')).toBeInTheDocument();
     expect(within(table).getAllByText('Maria Santos').length).toBeGreaterThan(0);
     expect(within(table).getByText('Reversed')).toBeInTheDocument();
     expect(ledgerService.listLedgerPage).toHaveBeenCalledWith(
-      expect.objectContaining({ year: YEAR, transactionType: 'ALLOCATION' }),
+      expect.objectContaining({ year: YEAR, transactionType: ['ALLOCATION', 'ADJUSTMENT'] }),
     );
   });
 
@@ -404,9 +514,9 @@ describe('Allocation history tab (UI §6.7, TC-CR-10)', () => {
     const table = await openHistory();
     void table;
     expect(
-      await screen.findByText(`No credit allocations recorded for ${String(YEAR)}.`),
+      await screen.findByText(`No allocations recorded for ${String(YEAR)}.`),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Allocate credits' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Allocate days' }).length).toBeGreaterThan(0);
   });
 
   it('Load more appends the next page using the cursor', async () => {
@@ -480,7 +590,7 @@ describe('Reverse dialog (UI §6.11, TC-REV-08)', () => {
     const big = entry('A'.repeat(20), { days: 10, creditsDelta: 10 });
     const dialog = await openReverse(big, balance('juan', 10, 8));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      "Can't reverse this allocation: 8 of its 10 credits are already used. Reverse the related usage entries first.",
+      "Can't reverse this allocation: 8 of its 10 days are already used. Reverse the related usage entries first.",
     );
     expect(within(dialog).getByRole('button', { name: 'Reverse entry' })).toBeDisabled();
   });

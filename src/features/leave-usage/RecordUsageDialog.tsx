@@ -205,7 +205,7 @@ function RecordUsageDialogContent({
       <DialogHeader>
         <DialogTitle>Record leave usage</DialogTitle>
         <DialogDescription>
-          Leave is deducted from the employee&apos;s credits for the selected year.
+          Leave is deducted from the employee&apos;s leave days for the selected year.
         </DialogDescription>
       </DialogHeader>
       <form
@@ -307,9 +307,9 @@ function RecordUsageDialogContent({
                 role="status"
                 className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
               >
-                No credits have been allocated to this employee for {yearText}.{' '}
+                No days have been allocated to this employee for {yearText}.{' '}
                 <Link to={`/leave-credits?year=${yearText}`} className="font-medium underline">
-                  Allocate credits
+                  Allocate days
                 </Link>
               </p>
             ) : balance ? (
@@ -323,7 +323,7 @@ function RecordUsageDialogContent({
               >
                 {insufficient ? (
                   <>
-                    Not enough credits: {formatDays(balance.availableCredits)} available,{' '}
+                    Not enough days: {formatDays(balance.availableCredits)} available,{' '}
                     {formatDays(requested)} requested.
                   </>
                 ) : (

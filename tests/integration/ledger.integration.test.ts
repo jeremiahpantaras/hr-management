@@ -330,7 +330,7 @@ describe('TC-LU: usage', () => {
       expect(error).toBeInstanceOf(errors.AppError);
       expect((error as ErrorsModule.AppError).code).toBe('INSUFFICIENT_BALANCE');
       expect((error as ErrorsModule.AppError).details).toEqual({ available: 1, requested: 2 });
-      expect(errors.appErrorMessage(error)).toBe('Not enough credits: 1 available, 2 requested.');
+      expect(errors.appErrorMessage(error)).toBe('Not enough days: 1 available, 2 requested.');
     }
     expect(await readEverything()).toEqual(before);
   });
@@ -378,6 +378,127 @@ describe('TC-LU: usage', () => {
     const page = await ledger.listLedgerPage({ year: 2026, employeeId: juanId });
     expect(page.items.every((e) => e.employeeId === juanId && e.leaveYear === 2026)).toBe(true);
     expect(page.items.map((e) => e.dateFrom)).toEqual(['2026-03-10', '2026-02-10', null]);
+  });
+});
+
+const edit = (newTotal: number, over: Partial<LedgerServiceModule.AdjustmentRequest> = {}) =>
+  ledger.recordAdjustment({
+    transactionId: ledger.newTransactionId(),
+    employeeId: juanId,
+    year: 2026,
+    newTotal,
+    reason: 'Corrected after review',
+    actor,
+    ...over,
+  });
+
+describe('TC-ADJ: editing allocated days', () => {
+  it('raises the total: one ADJUSTMENT entry + the balance, with who, when and why', async () => {
+    await alloc(10);
+    const result = await edit(12);
+    expect(result).toMatchObject({
+      status: 'created',
+      balance: { totalCredits: 12, totalUsed: 0 },
+    });
+    expect(await raw('leaveTransactions', result.transactionId)).toMatchObject({
+      transactionType: 'ADJUSTMENT',
+      days: 2,
+      creditsDelta: 2,
+      usedDelta: 0,
+      remarks: 'Corrected after review',
+      createdBy: actor.uid,
+      createdByName: 'Maria Santos',
+      resultingTotalCredits: 12,
+      reversedByTransactionId: null,
+    });
+    expect((await raw('leaveTransactions', result.transactionId))?.createdAt).toBeDefined();
+    expect(await raw('leaveBalances', balanceId())).toMatchObject({
+      totalCredits: 12,
+      availableCredits: 12,
+      lastTransactionId: result.transactionId,
+    });
+    // the original allocation is untouched; the history now has both
+    expect((await readEverything()).ledger).toHaveLength(2);
+  });
+
+  it('lowers the total, down to the days already used, and refuses going below', async () => {
+    await alloc(10);
+    await spend(4, '2026-02-10', '2026-02-13');
+    expect((await edit(6)).balance).toEqual({ totalCredits: 6, totalUsed: 4 });
+    expect((await edit(4)).balance).toEqual({ totalCredits: 4, totalUsed: 4 });
+    const before = await readEverything();
+    expect(await errorCodeOf(edit(3.5))).toBe('BELOW_USED');
+    expect(await readEverything()).toEqual(before);
+  });
+
+  it('is idempotent: the same transactionId twice (even concurrently) edits once', async () => {
+    await alloc(10);
+    const id = ledger.newTransactionId();
+    const results = await Promise.all([
+      edit(12, { transactionId: id }),
+      edit(12, { transactionId: id }),
+      edit(12, { transactionId: id }),
+    ]);
+    expect(results.filter((r) => r.status === 'created')).toHaveLength(1);
+    expect(await raw('leaveBalances', balanceId())).toMatchObject({ totalCredits: 12 });
+    expect((await readEverything()).ledger).toHaveLength(2);
+  });
+
+  it('refuses no change, a missing balance, an archived employee and a bad reason', async () => {
+    expect(await errorCodeOf(edit(12))).toBe('NOT_FOUND'); // nothing allocated yet
+    await alloc(10);
+    expect(await errorCodeOf(edit(10))).toBe('VALIDATION');
+    expect(await errorCodeOf(edit(12, { reason: 'ab' }))).toBe('VALIDATION');
+    await employees.archiveEmployee(juanId, actor.uid);
+    expect(await errorCodeOf(edit(12))).toBe('EMPLOYEE_ARCHIVED');
+    expect((await readEverything()).ledger).toHaveLength(1);
+  });
+
+  it('an edit cannot be reversed, but the allocation before it still can once nothing depends on it', async () => {
+    const first = await alloc(10);
+    const adjustment = await edit(12);
+    expect(
+      await errorCodeOf(
+        ledger.reverseEntry({
+          originalTransactionId: adjustment.transactionId,
+          reason: 'Undo the edit',
+          actor,
+        }),
+      ),
+    ).toBe('CANNOT_REVERSE');
+    // 12 total − 10 reversed = 2 left, nothing used → allowed
+    const reversed = await ledger.reverseEntry({
+      originalTransactionId: first.transactionId,
+      reason: 'Entered twice',
+      actor,
+    });
+    expect(reversed.balance).toEqual({ totalCredits: 2, totalUsed: 0 });
+  });
+
+  it('the allocation history query returns allocations and edits together, newest first', async () => {
+    await alloc(10);
+    await spend(1, '2026-02-10', '2026-02-10');
+    await edit(12);
+    const page = await ledger.listLedgerPage({
+      year: 2026,
+      transactionType: ['ALLOCATION', 'ADJUSTMENT'],
+    });
+    expect(page.items.map((e) => e.transactionType)).toEqual(['ADJUSTMENT', 'ALLOCATION']);
+  });
+
+  it('the reconcile check agrees: balance equals the sum of the ledger including edits', async () => {
+    await alloc(10);
+    await spend(2, '2026-02-10', '2026-02-11');
+    await edit(15);
+    await edit(11);
+    const all = await readEverything();
+    const result = reconcile(all.ledger, all.balances);
+    expect(result.ok).toBe(true);
+    expect(await raw('leaveBalances', balanceId())).toMatchObject({
+      totalCredits: 11,
+      totalUsed: 2,
+      availableCredits: 9,
+    });
   });
 });
 
@@ -487,7 +608,7 @@ describe('TC-REV: reversal', () => {
     } catch (error) {
       expect((error as ErrorsModule.AppError).code).toBe('CANNOT_REVERSE');
       expect(errors.appErrorMessage(error)).toBe(
-        "Can't reverse this allocation: 8 of its 10 credits are already used. Reverse the related usage entries first.",
+        "Can't reverse this allocation: 8 of its 10 days are already used. Reverse the related usage entries first.",
       );
     }
     expect(await readEverything()).toEqual(before);

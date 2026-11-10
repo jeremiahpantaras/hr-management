@@ -9,7 +9,7 @@ import { z } from 'zod';
  * end to end through react-hook-form (this is how every form in the app will validate).
  */
 const schema = z.object({
-  credits: z.number().positive('Credits must be greater than 0.'),
+  credits: z.number().positive('Days must be greater than 0.'),
   remarks: z.string().max(5, 'Too long.').optional(),
 });
 
@@ -28,7 +28,7 @@ describe('react-hook-form + @hookform/resolvers + Zod 4', () => {
       await result.current.form.trigger();
     });
 
-    expect(result.current.errors.credits?.message).toBe('Credits must be greater than 0.');
+    expect(result.current.errors.credits?.message).toBe('Days must be greater than 0.');
     expect(result.current.errors.remarks?.message).toBe('Too long.');
   });
 
@@ -57,6 +57,6 @@ describe('react-hook-form + @hookform/resolvers + Zod 4', () => {
     });
 
     expect(called).toBe(false);
-    expect(result.current.errors.credits?.message).toBe('Credits must be greater than 0.');
+    expect(result.current.errors.credits?.message).toBe('Days must be greater than 0.');
   });
 });

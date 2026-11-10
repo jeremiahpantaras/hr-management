@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { AppError } from '@/domain/errors';
 import {
   availableDelta,
+  buildAdjustmentEntry,
   buildAllocationEntry,
   buildReversalEntry,
   buildUsageEntry,
@@ -260,6 +261,93 @@ describe('buildUsageEntry (BR-LU-*, BR-INS-*)', () => {
   it('stores the dates exactly as entered (BR-LU-11)', () => {
     const { entry } = buildUsageEntry(base);
     expect([entry.dateFrom, entry.dateTo]).toEqual(['2026-02-10', '2026-02-11']);
+  });
+});
+
+describe('buildAdjustmentEntry (editing allocated days)', () => {
+  const balance = { totalCredits: 10, totalUsed: 3 };
+  const base = { employee, year: 2026, balance, actor: ACTOR, reason: 'Corrected after audit' };
+
+  it('raises the total: signed delta, days = |delta|, nothing used, who and why recorded', () => {
+    const { entry, balance: after } = buildAdjustmentEntry({ ...base, newTotal: 12 });
+    expect(after).toEqual({ totalCredits: 12, totalUsed: 3 });
+    expect(entry).toMatchObject({
+      transactionType: 'ADJUSTMENT',
+      days: 2,
+      creditsDelta: 2,
+      usedDelta: 0,
+      dateFrom: null,
+      dateTo: null,
+      remarks: 'Corrected after audit',
+      reversesTransactionId: null,
+      reversedByTransactionId: null,
+      resultingTotalCredits: 12,
+      resultingTotalUsed: 3,
+      balanceId: 'emp1_2026',
+      createdBy: 'uHr',
+      createdByName: 'Maria Santos',
+      employeeNameSnapshot: 'Juan Dela Cruz',
+    });
+  });
+  it('lowers the total (10 → 7.5) with a negative delta', () => {
+    const { entry, balance: after } = buildAdjustmentEntry({ ...base, newTotal: 7.5 });
+    expect(after.totalCredits).toBe(7.5);
+    expect(entry).toMatchObject({ days: 2.5, creditsDelta: -2.5, resultingTotalCredits: 7.5 });
+  });
+  it('allows exactly the days already used (remaining becomes 0)', () => {
+    expect(buildAdjustmentEntry({ ...base, newTotal: 3 }).balance).toEqual({
+      totalCredits: 3,
+      totalUsed: 3,
+    });
+  });
+  it('refuses a total below the days already used, carrying both figures', () => {
+    try {
+      buildAdjustmentEntry({ ...base, newTotal: 2.5 });
+      expect.unreachable();
+    } catch (error) {
+      expect((error as AppError).code).toBe('BELOW_USED');
+      expect((error as AppError).details).toEqual({ used: 3, requested: 2.5 });
+    }
+  });
+  it('refuses no change, quarter days, negatives, NaN and a swing above 365', () => {
+    for (const newTotal of [10, 10.25, -1, Number.NaN, 400]) {
+      expect(errorCode(() => buildAdjustmentEntry({ ...base, newTotal }))).toBe('VALIDATION');
+    }
+  });
+  it.each(['', '  ', 'ab', 'x'.repeat(501)])(
+    'requires a reason of 3–500 characters: %j',
+    (reason) => {
+      expect(errorCode(() => buildAdjustmentEntry({ ...base, newTotal: 12, reason }))).toBe(
+        'VALIDATION',
+      );
+    },
+  );
+  it('needs an existing balance and an active employee', () => {
+    expect(errorCode(() => buildAdjustmentEntry({ ...base, newTotal: 12, balance: null }))).toBe(
+      'NOT_FOUND',
+    );
+    expect(
+      errorCode(() =>
+        buildAdjustmentEntry({
+          ...base,
+          newTotal: 12,
+          employee: makeEmployee({ isArchived: true }),
+        }),
+      ),
+    ).toBe('EMPLOYEE_ARCHIVED');
+  });
+  it('an edit can never be reversed (edit again instead)', () => {
+    const { entry } = buildAdjustmentEntry({ ...base, newTotal: 12 });
+    expect(
+      errorCode(() =>
+        buildReversalEntry({
+          original: { ...entry, id: 'x'.repeat(20), createdAt: null },
+          balance: { totalCredits: 12, totalUsed: 3 },
+          reason: 'Oops',
+          actor: ACTOR,
+        }),
+      ),
+    ).toBe('CANNOT_REVERSE');
   });
 });
 

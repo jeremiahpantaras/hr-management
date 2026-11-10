@@ -5,7 +5,7 @@ import { daysField, remarksField, yearField } from '@/domain/schemas/days';
 export const allocationSchema = z.object({
   employeeId: z.string().min(1, 'Select an employee.'),
   year: yearField,
-  days: daysField('Enter the number of credits.', 'Credits'),
+  days: daysField('Enter the number of days.', 'Days'),
   remarks: remarksField,
 });
 

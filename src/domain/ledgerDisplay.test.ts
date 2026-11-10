@@ -10,10 +10,10 @@ import {
 describe('effectLabel (UI §6.6)', () => {
   it('shows the signed effect with the right unit', () => {
     expect(effectLabel({ transactionType: 'ALLOCATION', reversesType: null, days: 10 })).toBe(
-      '+10 credits',
+      '+10 days',
     );
     expect(effectLabel({ transactionType: 'ALLOCATION', reversesType: null, days: 1 })).toBe(
-      '+1 credit',
+      '+1 day',
     );
     expect(effectLabel({ transactionType: 'USAGE', reversesType: null, days: 2 })).toBe('−2 days');
     expect(effectLabel({ transactionType: 'USAGE', reversesType: null, days: 0.5 })).toBe(
@@ -26,7 +26,7 @@ describe('effectLabel (UI §6.6)', () => {
       '+1 day (reversal)',
     );
     expect(effectLabel({ transactionType: 'REVERSAL', reversesType: 'ALLOCATION', days: 2 })).toBe(
-      '−2 credits (reversal)',
+      '−2 days (reversal)',
     );
   });
 });
@@ -52,5 +52,22 @@ describe('transactionKind / isReversible / reversalAvailableDelta', () => {
   it('reversing a usage gives days back; reversing an allocation removes them', () => {
     expect(reversalAvailableDelta({ transactionType: 'USAGE', days: 2 })).toBe(2);
     expect(reversalAvailableDelta({ transactionType: 'ALLOCATION', days: 2 })).toBe(-2);
+  });
+});
+
+describe('edits (ADJUSTMENT)', () => {
+  it('is labelled Edit, with the sign of the change', () => {
+    expect(transactionKind({ transactionType: 'ADJUSTMENT' })).toBe('Edit');
+    const base = { transactionType: 'ADJUSTMENT', reversesType: null, days: 2 } as const;
+    expect(effectLabel({ ...base, creditsDelta: 2 })).toBe('+2 days (edit)');
+    expect(effectLabel({ ...base, creditsDelta: -2 })).toBe('−2 days (edit)');
+    expect(effectLabel({ ...base, days: 1, creditsDelta: -1 })).toBe('−1 day (edit)');
+  });
+  it('is never reversible; allocations and usages still are', () => {
+    const none = { reversedByTransactionId: null };
+    expect(isReversible({ ...none, transactionType: 'ADJUSTMENT' })).toBe(false);
+    expect(isReversible({ ...none, transactionType: 'ALLOCATION' })).toBe(true);
+    expect(isReversible({ ...none, transactionType: 'USAGE' })).toBe(true);
+    expect(isReversible({ ...none, transactionType: 'REVERSAL' })).toBe(false);
   });
 });

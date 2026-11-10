@@ -158,7 +158,7 @@ function ReverseDialogContent({ entry, onReversed }: ContentProps) {
               <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
               <span>
                 Can&apos;t reverse this allocation: {formatDays(usedOfIt)} of its{' '}
-                {formatDays(entry.days)} credits are already used. Reverse the related usage entries
+                {formatDays(entry.days)} days are already used. Reverse the related usage entries
                 first.
               </span>
             </div>

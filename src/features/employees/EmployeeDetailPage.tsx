@@ -26,6 +26,7 @@ import {
   useRestoreEmployee,
 } from '@/features/employees/hooks/useEmployees';
 import { AllocationDialog } from '@/features/leave-credits/AllocationDialog';
+import { EditDaysDialog } from '@/features/leave-credits/EditDaysDialog';
 import { useEmployeeYearBalances } from '@/features/leave-credits/hooks/useBalances';
 import { LedgerList } from '@/features/leave-history/LedgerList';
 import { RecordUsageDialog } from '@/features/leave-usage/RecordUsageDialog';
@@ -50,6 +51,7 @@ export function EmployeeDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [allocateOpen, setAllocateOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [editDaysOpen, setEditDaysOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const replacement = useReplacementFlow(year);
 
@@ -180,7 +182,16 @@ export function EmployeeDetailPage() {
                   }}
                 >
                   <Plus aria-hidden="true" />
-                  Allocate credits
+                  Allocate days
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={archived || totals.totalCredits === 0}
+                  onClick={() => {
+                    setEditDaysOpen(true);
+                  }}
+                >
+                  Edit days
                 </Button>
                 <Button
                   variant="secondary"
@@ -229,7 +240,7 @@ export function EmployeeDetailPage() {
               <>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <StatCard
-                    label="Total Credits"
+                    label="Total Days"
                     value={formatDays(totals.totalCredits)}
                     caption={String(year)}
                     loading={summaryLoading}
@@ -249,7 +260,7 @@ export function EmployeeDetailPage() {
                 </div>
                 {summaryLoading ? null : (balances.data ?? []).length === 0 ? (
                   <p className="text-sm text-fg-muted">
-                    No credits have been allocated to this employee for {year}.
+                    No days have been allocated to this employee for {year}.
                   </p>
                 ) : null}
                 {summaryLoading || totals.totalCredits === 0 ? null : (
@@ -257,7 +268,7 @@ export function EmployeeDetailPage() {
                     <ProgressBar
                       value={totals.totalUsed}
                       max={totals.totalCredits}
-                      label={`${employee.fullName} — ${String(year)} credits used`}
+                      label={`${employee.fullName} — ${String(year)} days used`}
                     />
                     <p className="mt-2 text-caption text-fg-muted tabular-nums">
                       {formatDays(totals.totalUsed)} used of {formatDays(totals.totalCredits)}
@@ -284,7 +295,7 @@ export function EmployeeDetailPage() {
                     archived
                       ? undefined
                       : {
-                          label: 'Allocate credits',
+                          label: 'Allocate days',
                           onClick: () => {
                             setAllocateOpen(true);
                           },
@@ -303,6 +314,15 @@ export function EmployeeDetailPage() {
             year={year}
             defaults={{ employeeId: employee.id }}
           />
+          <EditDaysDialog
+            open={editDaysOpen}
+            onOpenChange={setEditDaysOpen}
+            year={year}
+            target={{
+              employee: { id: employee.id, fullName: employee.fullName },
+              balance: { totalCredits: totals.totalCredits, totalUsed: totals.totalUsed },
+            }}
+          />
           <RecordUsageDialog
             open={recordOpen}
             onOpenChange={setRecordOpen}
@@ -313,7 +333,7 @@ export function EmployeeDetailPage() {
             open={archiveOpen}
             onOpenChange={setArchiveOpen}
             title={`Archive ${employee.fullName}?`}
-            description="Their leave history is kept and appears in reports, but they won't be available when allocating credits or recording leave. You can restore them at any time."
+            description="Their leave history is kept and appears in reports, but they won't be available when allocating days or recording leave. You can restore them at any time."
             confirmLabel="Archive employee"
             onConfirm={confirmArchive}
           />

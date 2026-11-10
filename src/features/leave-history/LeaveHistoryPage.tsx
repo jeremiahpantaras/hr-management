@@ -13,7 +13,7 @@ export function LeaveHistoryPage() {
     <PageContainer>
       <PageHeader
         title="Leave History"
-        description="Every credit allocation, leave usage and reversal."
+        description="Every allocation, leave usage and reversal."
         actions={<YearSelect value={year} onChange={setYear} />}
       />
       {replacement.node}

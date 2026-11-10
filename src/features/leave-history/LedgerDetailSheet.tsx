@@ -78,11 +78,17 @@ export function LedgerDetailSheet({
               <Row label="Position">{entry.positionSnapshot}</Row>
               <Row label="Location">{entry.departmentSnapshot ?? '—'}</Row>
               <Row label="Balance after">
-                {formatDays(entry.resultingTotalCredits - entry.resultingTotalUsed)} available (
-                {formatDays(entry.resultingTotalCredits)} credits,{' '}
+                {formatDays(entry.resultingTotalCredits - entry.resultingTotalUsed)} remaining (
+                {formatDays(entry.resultingTotalCredits)} total,{' '}
                 {formatDays(entry.resultingTotalUsed)} used)
               </Row>
-              <Row label="Change in available">{formatDays(availableDelta(entry))}</Row>
+              {entry.transactionType === 'ADJUSTMENT' ? (
+                <Row label="Total days">
+                  {formatDays(entry.resultingTotalCredits - entry.creditsDelta)} →{' '}
+                  {formatDays(entry.resultingTotalCredits)}
+                </Row>
+              ) : null}
+              <Row label="Change in remaining">{formatDays(availableDelta(entry))}</Row>
               <Row label="Recorded by">{entry.createdByName}</Row>
               <Row label="Date recorded">
                 {entry.createdAt ? formatTimestamp(entry.createdAt) : '—'}

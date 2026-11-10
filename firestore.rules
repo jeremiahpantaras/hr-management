@@ -215,6 +215,18 @@ service cloud.firestore {
         && d.reversesTransactionId == null && d.reversesType == null
         && masterDataOk(d);
     }
+    // ADJUSTMENT ("Edit days"): changes an EXISTING balance's total up or down. The signed delta is
+    // the entry's `days` (always > 0) with either sign; nothing is used or dated; a reason is
+    // mandatory; the employee must be active. The balance rules stop the total going below what is
+    // already used (available stays >= 0), and a balance can never be created this way.
+    function adjustmentOk(d) {
+      return (d.creditsDelta == d.days || d.creditsDelta == -d.days) && d.usedDelta == 0
+        && d.dateFrom == null && d.dateTo == null
+        && d.reversesTransactionId == null && d.reversesType == null
+        && d.remarks is string && d.remarks.size() >= 3
+        && exists(balPath(d.balanceId))
+        && masterDataOk(d);
+    }
     // REVERSAL: an exact mirror of the original, linked both ways in the same commit (R-02, R-03).
     function reversalOk(txnId, d) {
       return d.reversesTransactionId is string
@@ -256,6 +268,7 @@ service cloud.firestore {
         // ── per-type semantics ──
         && ((d.transactionType == 'ALLOCATION' && allocationOk(d))
             || (d.transactionType == 'USAGE'    && usageOk(d))
+            || (d.transactionType == 'ADJUSTMENT' && adjustmentOk(d))
             || (d.transactionType == 'REVERSAL' && reversalOk(txnId, d)));
     }
     // The single permitted update: link an original to its reversal, exactly once.

@@ -152,7 +152,7 @@ describe('Reports page — preview (the company layout)', () => {
       '5',
       '5',
     ]);
-    expect(card).toHaveTextContent('Credits 10 · Used 5 · Remaining 5');
+    expect(card).toHaveTextContent('Total 10 · Used 5 · Remaining 5');
     expect(within(card).getByText('Reconciled')).toBeInTheDocument();
     expect(balancesService.getYearBalances).toHaveBeenCalledWith(2026);
     expect(ledgerService.getLedgerYear).toHaveBeenCalledWith(2026, undefined);

@@ -183,7 +183,7 @@ export function buildReport(input: ReportInput): ReportModel {
   };
 }
 
-/** One-line description of the totals, used by the preview ("Credits 54 · Used 15 · Remaining 39"). */
+/** One-line description of the totals, used by the preview ("Total 54 · Used 15 · Remaining 39"). */
 export function describeTotals(totals: ReportModel['totals']): string {
-  return `Credits ${formatDays(totals.credits)} · Used ${formatDays(totals.used)} · Remaining ${formatDays(totals.remaining)}`;
+  return `Total ${formatDays(totals.credits)} · Used ${formatDays(totals.used)} · Remaining ${formatDays(totals.remaining)}`;
 }

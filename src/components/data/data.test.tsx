@@ -226,11 +226,11 @@ describe('ProgressBar / StatCard / SearchInput', () => {
   });
 
   it('StatCard shows its figure, or a labelled loading state', () => {
-    const { rerender } = render(<StatCard label="Total credits" value="18" caption="2026" />);
+    const { rerender } = render(<StatCard label="Total days" value="18" caption="2026" />);
     expect(screen.getByText('18')).toBeInTheDocument();
-    rerender(<StatCard label="Total credits" value="18" loading />);
+    rerender(<StatCard label="Total days" value="18" loading />);
     expect(screen.queryByText('18')).toBeNull();
-    expect(screen.getByRole('status', { name: 'Loading Total credits' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading Total days' })).toBeInTheDocument();
   });
 
   it('SearchInput is labelled, reports changes, and clears', async () => {

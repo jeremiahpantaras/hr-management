@@ -127,11 +127,9 @@ describe('Juan-2026 summary (TC-SUM-02, FR-SUM-02/03)', () => {
       await screen.findByRole('heading', { name: `Leave summary for ${String(YEAR)}` })
     ).closest('section')!;
     await within(tiles).findByRole('progressbar', {
-      name: `Juan Dela Cruz — ${String(YEAR)} credits used`,
+      name: `Juan Dela Cruz — ${String(YEAR)} days used`,
     });
-    expect(within(tiles).getByText('Total Credits').closest('div.flex-col')).toHaveTextContent(
-      '10',
-    );
+    expect(within(tiles).getByText('Total Days').closest('div.flex-col')).toHaveTextContent('10');
     expect(within(tiles).getByText('Total Used').closest('div.flex-col')).toHaveTextContent('5');
     expect(within(tiles).getByText('Total Unused').closest('div.flex-col')).toHaveTextContent('5');
     expect(within(tiles).getByText('5 used of 10')).toBeInTheDocument();
@@ -149,7 +147,7 @@ describe('Juan-2026 summary (TC-SUM-02, FR-SUM-02/03)', () => {
     // TC-SUM-03: another year has no data → zeros and the empty message; this year's figures are not shown
     expect(
       await screen.findByText(
-        `No credits have been allocated to this employee for ${String(YEAR - 1)}.`,
+        `No days have been allocated to this employee for ${String(YEAR - 1)}.`,
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
@@ -201,7 +199,7 @@ describe('Transaction history (TC-SUM-06/07)', () => {
     const table = await screen.findByRole('table', {
       name: /Transaction history for Juan Dela Cruz/,
     });
-    await within(table).findByText('+10 credits');
+    await within(table).findByText('+10 days');
     expect(within(table).getByText('−2 days')).toBeInTheDocument();
     expect(within(table).getByText('+2 days (reversal)')).toBeInTheDocument();
     expect(within(table).getByText('Reversed')).toBeInTheDocument();
@@ -223,14 +221,14 @@ describe('Actions and the archived employee (TC-SUM-08, R-03)', () => {
   it('an active employee can be edited, allocated to, recorded for, exported and archived', async () => {
     renderAt('/employees/juan');
     await screen.findByRole('heading', { name: 'Juan Dela Cruz' });
-    expect(screen.getByRole('button', { name: 'Allocate credits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Allocate days' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Record usage' })).toBeEnabled();
     expect(screen.getByRole('link', { name: 'Export Excel' })).toHaveAttribute(
       'href',
       `/reports?employee=juan&year=${String(YEAR)}`,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Allocate credits' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Allocate credits' });
+    await userEvent.click(screen.getByRole('button', { name: 'Allocate days' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Allocate days' });
     expect(within(dialog).getByRole('combobox', { name: /^Employee/ })).toHaveTextContent(
       'Juan Dela Cruz',
     );
@@ -259,11 +257,11 @@ describe('Actions and the archived employee (TC-SUM-08, R-03)', () => {
     expect(
       await screen.findByText('This employee is archived. History is read-only.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Allocate credits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Allocate days' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Record usage' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
     // history stays visible and a reversal is still possible (R-03)
-    expect(await screen.findByText('+10 credits')).toBeInTheDocument();
+    expect(await screen.findByText('+10 days')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Reverse allocation for/ })).toBeEnabled();
     await userEvent.click(screen.getByRole('button', { name: 'Restore employee' }));
     await waitFor(() => {

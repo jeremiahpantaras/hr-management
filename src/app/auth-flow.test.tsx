@@ -144,7 +144,7 @@ describe('session persistence (TC-AUTH-05)', () => {
   it('a refresh with a stored session goes straight to the page — no login screen', async () => {
     backend.restoreSession('maria@example.test');
     openApp('/leave-credits');
-    expect(await h1('Leave Credits')).toBeInTheDocument();
+    expect(await h1('Leave Days')).toBeInTheDocument();
     expect(screen.queryByLabelText('Email')).toBeNull();
   });
 

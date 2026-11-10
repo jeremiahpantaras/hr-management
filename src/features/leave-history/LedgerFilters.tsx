@@ -21,6 +21,7 @@ interface LedgerFiltersProps {
 const TYPE_OPTIONS = [
   { value: 'ALLOCATION', label: 'Allocation' },
   { value: 'USAGE', label: 'Usage' },
+  { value: 'ADJUSTMENT', label: 'Edit' },
   { value: 'REVERSAL', label: 'Reversal' },
 ];
 

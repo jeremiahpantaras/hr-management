@@ -21,6 +21,7 @@ import { createRulesEnv, seedUserProfile } from '../setup/emulator';
 import {
   EMP_ID,
   addPair,
+  adjustmentPair,
   allocationPair,
   archivedEmployee,
   commitPair,
@@ -862,5 +863,127 @@ describe('V-1…V-10 as exercised by the real rules', () => {
     await assertSucceeds(commitPair(hr(), allocationPair({ id: T(1), days: 1, year: 2026 })));
     await assertSucceeds(commitPair(hr(), allocationPair({ id: T(2), days: 1, year: 2100 })));
     await assertSucceeds(commitPair(hr(), allocationPair({ id: T(3), days: 1, year: 2000 })));
+  });
+});
+
+describe('editing allocated days — ADJUSTMENT entries (LED-27…32)', () => {
+  const ten = { totalCredits: 10, totalUsed: 0 };
+
+  it('LED-27: raising the total (10 → 12) commits and updates the balance', async () => {
+    await allocate10();
+    await assertSucceeds(
+      commitPair(hr(), adjustmentPair({ id: T(2), newTotal: 12, balance: ten })),
+    );
+    const stored = await getDoc(doc(hr(), 'leaveBalances', `${EMP_ID}_2026`));
+    expect(stored.data()).toMatchObject({
+      totalCredits: 12,
+      availableCredits: 12,
+      lastTransactionId: T(2),
+    });
+    const entry = await getDoc(doc(hr(), 'leaveTransactions', T(2)));
+    expect(entry.data()).toMatchObject({
+      transactionType: 'ADJUSTMENT',
+      creditsDelta: 2,
+      createdBy: 'hr1',
+      createdByName: 'Maria Santos',
+    });
+  });
+
+  it('LED-28: lowering the total commits, down to exactly the days already used', async () => {
+    await allocate10();
+    await use(T(2), 4, '2026-02-10', '2026-02-13', ten);
+    await assertSucceeds(
+      commitPair(
+        hr(),
+        adjustmentPair({ id: T(3), newTotal: 6, balance: { totalCredits: 10, totalUsed: 4 } }),
+      ),
+    );
+    const stored = await getDoc(doc(hr(), 'leaveBalances', `${EMP_ID}_2026`));
+    expect(stored.data()).toMatchObject({ totalCredits: 6, totalUsed: 4, availableCredits: 2 });
+  });
+
+  it('LED-29: a total below the days already used is denied (the client builder refuses it too)', async () => {
+    await allocate10();
+    await use(T(2), 4, '2026-02-10', '2026-02-13', ten);
+    // Forge the entry as if the check had been skipped: 10 → 3 with 4 used.
+    const forged = tamper(
+      adjustmentPair({ id: T(3), newTotal: 4, balance: { totalCredits: 10, totalUsed: 4 } }),
+      { days: 7, creditsDelta: -7, resultingTotalCredits: 3 },
+      { totalCredits: 3, availableCredits: -1 },
+    );
+    await assertFails(commitPair(hr(), forged));
+  });
+
+  it('LED-30: an edit can never create a balance', async () => {
+    const pair = adjustmentPair({ id: T(1), newTotal: 12, balance: ten });
+    const asCreate: Pair = {
+      ...pair,
+      isNewBalance: true,
+      balance: {
+        ...pair.balance,
+        employeeId: EMP_ID,
+        year: 2026,
+        totalCredits: 2,
+        availableCredits: 2,
+        createdAt: serverTimestamp(),
+        totalUsed: 0,
+      },
+    };
+    await assertFails(commitPair(hr(), asCreate));
+    await assertFails(commitPair(hr(), pair)); // no balance to update either
+  });
+
+  it.each([
+    ['no reason', { remarks: null }],
+    ['a 2-character reason', { remarks: 'ab' }],
+    ['used days', { usedDelta: 1 }],
+    ['leave dates', { dateFrom: '2026-02-10', dateTo: '2026-02-10' }],
+    ['a reversal link', { reversesTransactionId: T(1), reversesType: 'ALLOCATION' }],
+    ['days not matching the delta', { days: 5 }],
+    ['a zero change', { days: 1, creditsDelta: 0 }],
+    ['a forged name snapshot', { employeeNameSnapshot: 'Someone Else' }],
+    ['a forged author', { createdBy: 'other', createdByName: 'Other' }],
+    ['a forged type on a plain allocation shape', { transactionType: 'ADJUSTMENT', usedDelta: 2 }],
+  ])('LED-31: an edit with %s is denied', async (_name, change) => {
+    await allocate10();
+    await assertFails(
+      commitPair(hr(), tamper(adjustmentPair({ id: T(2), newTotal: 12, balance: ten }), change)),
+    );
+  });
+
+  it('LED-31: an edit with a client-supplied createdAt is denied', async () => {
+    await allocate10();
+    await assertFails(
+      commitPair(
+        hr(),
+        tamper(adjustmentPair({ id: T(2), newTotal: 12, balance: ten }), {
+          createdAt: Timestamp.fromDate(new Date('2020-01-01')),
+        }),
+      ),
+    );
+  });
+
+  it('LED-32: an edit for an archived employee is denied; a deactivated or wrong-role user cannot edit', async () => {
+    await allocate10();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'employees', EMP_ID), { isArchived: true });
+    });
+    await assertFails(commitPair(hr(), adjustmentPair({ id: T(2), newTotal: 12, balance: ten })));
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'employees', EMP_ID), { isArchived: false });
+    });
+    const pair = adjustmentPair({ id: T(3), newTotal: 12, balance: ten });
+    await assertFails(commitPair(env.authenticatedContext('inactive1').firestore(), pair));
+    await assertFails(commitPair(env.authenticatedContext('wrongrole1').firestore(), pair));
+  });
+
+  it('LED-32: an edit is immutable and cannot be linked to a reversal or deleted', async () => {
+    await allocate10();
+    await commitPair(hr(), adjustmentPair({ id: T(2), newTotal: 12, balance: ten }));
+    await assertFails(updateDoc(doc(hr(), 'leaveTransactions', T(2)), { remarks: 'changed' }));
+    await assertFails(
+      updateDoc(doc(hr(), 'leaveTransactions', T(2)), { reversedByTransactionId: `rev_${T(2)}` }),
+    );
+    await assertFails(deleteDoc(doc(hr(), 'leaveTransactions', T(2))));
   });
 });

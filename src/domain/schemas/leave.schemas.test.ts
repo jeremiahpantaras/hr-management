@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { adjustmentSchema } from '@/domain/schemas/adjustment';
 import { allocationSchema } from '@/domain/schemas/allocation';
 import { changePasswordSchema, profileSchema } from '@/domain/schemas/auth';
 import { reversalSchema } from '@/domain/schemas/reversal';
@@ -42,10 +43,10 @@ describe('allocationSchema (UI §12)', () => {
     });
   });
   it.each([
-    ['', 'Enter the number of credits.'],
-    ['abc', 'Enter the number of credits.'],
-    ['0', 'Credits must be greater than 0.'],
-    ['-1', 'Credits must be greater than 0.'],
+    ['', 'Enter the number of days.'],
+    ['abc', 'Enter the number of days.'],
+    ['0', 'Days must be greater than 0.'],
+    ['-1', 'Days must be greater than 0.'],
     ['0.3', 'Use whole or half days (0.5).'],
     ['1.25', 'Use whole or half days (0.5).'],
     ['366', 'The maximum is 365 per entry.'],
@@ -179,5 +180,30 @@ describe('account schemas (TC-AUTH-10)', () => {
     expect(
       messages(changePasswordSchema.safeParse({ ...ok, currentPassword: '' })).currentPassword,
     ).toBe('Enter your current password.');
+  });
+});
+
+describe('adjustmentSchema (edit days)', () => {
+  const ok = { newTotal: '12', reason: 'Corrected' };
+  it('parses the total to a number and trims the reason', () => {
+    expect(adjustmentSchema.parse({ newTotal: ' 12.5 ', reason: '  Corrected ' })).toEqual({
+      newTotal: 12.5,
+      reason: 'Corrected',
+    });
+  });
+  it.each([
+    ['', 'Enter the new total days.'],
+    ['abc', 'Enter the new total days.'],
+    ['-1', 'The total can’t be negative.'],
+    ['1.25', 'Use whole or half days (0.5).'],
+  ])('total %j → %s', (newTotal, message) => {
+    expect(messages(adjustmentSchema.safeParse({ ...ok, newTotal })).newTotal).toBe(message);
+  });
+  it('requires a reason of at least 3 characters and at most 500', () => {
+    expect(messages(adjustmentSchema.safeParse({ ...ok, reason: 'ab' })).reason).toBe(
+      'Enter a reason (at least 3 characters).',
+    );
+    expect(adjustmentSchema.safeParse({ ...ok, reason: 'x'.repeat(500) }).success).toBe(true);
+    expect(adjustmentSchema.safeParse({ ...ok, reason: 'x'.repeat(501) }).success).toBe(false);
   });
 });

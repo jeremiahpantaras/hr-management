@@ -12,13 +12,14 @@ export type AppErrorCode =
   | 'EMPLOYEE_HAS_RECORDS'
   | 'ALREADY_REVERSED'
   | 'CANNOT_REVERSE'
+  | 'BELOW_USED'
   | 'NOT_FOUND'
   | 'PERMISSION_DENIED'
   | 'CONTENTION'
   | 'OFFLINE'
   | 'UNKNOWN';
 
-/** Figures that make a message specific ("3 of its 10 credits are already used"). */
+/** Figures that make a message specific ("3 of its 10 days are already used"). */
 export interface AppErrorDetails {
   readonly available?: number;
   readonly requested?: number;
@@ -50,13 +51,14 @@ export class AppError extends Error {
 /** UI spec §12 copy. */
 const MESSAGES: Record<AppErrorCode, string> = {
   VALIDATION: 'Please check the highlighted fields and try again.',
-  INSUFFICIENT_BALANCE: 'There are not enough leave credits for that.',
+  INSUFFICIENT_BALANCE: 'There are not enough leave days for that.',
   EMPLOYEE_ARCHIVED: 'That employee is archived. Restore them to continue.',
   DUPLICATE_EMPLOYEE_NUMBER: 'This employee ID is already in use.',
   EMPLOYEE_HAS_RECORDS:
     "This employee has leave records and can't be deleted. Archive them instead.",
   ALREADY_REVERSED: 'This entry has already been reversed.',
   CANNOT_REVERSE: "This entry can't be reversed.",
+  BELOW_USED: "The total can't be lower than the days already used.",
   NOT_FOUND: 'That record no longer exists. Refresh and try again.',
   PERMISSION_DENIED: 'You no longer have permission to do that. Please sign in again.',
   CONTENTION: 'Another change was saving at the same time. Please try again.',
@@ -71,10 +73,13 @@ export function appErrorMessage(error: unknown): string {
   if (!(error instanceof AppError)) return MESSAGES.UNKNOWN;
   const { available, requested, used, days } = error.details;
   if (error.code === 'INSUFFICIENT_BALANCE' && available !== undefined && requested !== undefined) {
-    return `Not enough credits: ${fmt(available)} available, ${fmt(requested)} requested.`;
+    return `Not enough days: ${fmt(available)} available, ${fmt(requested)} requested.`;
+  }
+  if (error.code === 'BELOW_USED' && used !== undefined && requested !== undefined) {
+    return `The total can't be lower than the days already used: ${fmt(used)} used, ${fmt(requested)} entered.`;
   }
   if (error.code === 'CANNOT_REVERSE' && used !== undefined && days !== undefined) {
-    return `Can't reverse this allocation: ${fmt(used)} of its ${fmt(days)} credits are already used. Reverse the related usage entries first.`;
+    return `Can't reverse this allocation: ${fmt(used)} of its ${fmt(days)} days are already used. Reverse the related usage entries first.`;
   }
   return MESSAGES[error.code];
 }

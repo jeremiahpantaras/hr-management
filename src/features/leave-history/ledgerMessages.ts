@@ -15,7 +15,7 @@ export function ledgerErrorMessage(error: unknown, context: LedgerErrorContext =
       return `${employeeName} is archived. Restore them to continue.`;
     }
     if (error.code === 'INSUFFICIENT_BALANCE' && noBalance && employeeName && year) {
-      return `No credits have been allocated to ${employeeName} for ${String(year)}.`;
+      return `No days have been allocated to ${employeeName} for ${String(year)}.`;
     }
   }
   return appErrorMessage(error);

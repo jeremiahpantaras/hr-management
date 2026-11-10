@@ -46,7 +46,7 @@ const shellRoutes = [
   ['/', 'Dashboard', 'Dashboard', 'Dashboard'],
   ['/employees', 'Employees', 'Employees', 'Employees'],
   ['/employees/abc123', 'Employee details', 'Employee details', 'Employees'],
-  ['/leave-credits', 'Leave Credits', 'Leave Credits', 'Leave Credits'],
+  ['/leave-credits', 'Leave Days', 'Leave Days', 'Leave Days'],
   ['/leave-usage', 'Leave Usage', 'Leave Usage', 'Leave Usage'],
   ['/leave-history', 'Leave History', 'Leave History', 'Leave History'],
   ['/reports', 'Reports', 'Reports', 'Reports'],

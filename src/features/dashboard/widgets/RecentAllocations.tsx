@@ -9,14 +9,14 @@ export function RecentAllocations({ year }: { readonly year: number }) {
   const rows = query.data ?? [];
   return (
     <WidgetCard
-      title="Recent credit allocations"
+      title="Recent allocations"
       viewAll={{ to: `/leave-credits?tab=history&year=${String(year)}`, label: 'View all' }}
       loading={query.isPending}
       error={query.isError ? query.error : null}
       onRetry={() => void query.refetch()}
     >
       {rows.length === 0 ? (
-        <p className="text-sm text-fg-muted">No credit allocations recorded for {year}.</p>
+        <p className="text-sm text-fg-muted">No allocations recorded for {year}.</p>
       ) : (
         <ul className="flex flex-col divide-y">
           {rows.map((entry) => (

@@ -185,7 +185,7 @@ export function ComponentGallery() {
       <Section title="Typography">
         <Card>
           <CardContent className="flex flex-col gap-2">
-            <p className="text-page-title">Page title — Leave Credits</p>
+            <p className="text-page-title">Page title — Leave Days</p>
             <p className="text-section">Section heading — Recent transactions</p>
             <p className="text-card-title">Card heading</p>
             <p className="text-sm">Body text — Juan Dela Cruz filed 2 days of vacation leave.</p>
@@ -240,7 +240,7 @@ export function ComponentGallery() {
               ]}
               placeholder="Select status"
             />
-            <DaysField label="Credits to add" required defaultValue="2.5" />
+            <DaysField label="Days to add" required defaultValue="2.5" />
             <FormField
               label="Remarks"
               className="sm:col-span-2"
@@ -304,13 +304,13 @@ export function ComponentGallery() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard label="Total employees" value="87" icon={Users} caption="Includes archived" />
           <StatCard label="Active employees" value="82" icon={Users} caption="of 87 total" />
-          <StatCard label="Total credits (2026)" value="1,420" icon={CalendarPlus} />
+          <StatCard label="Total days (2026)" value="1,420" icon={CalendarPlus} />
           <StatCard
             label="Total used"
             value="312"
             icon={CalendarPlus}
-            caption="22% of credits"
-            progress={{ value: 312, max: 1420, label: 'Credits used' }}
+            caption="22% of days"
+            progress={{ value: 312, max: 1420, label: 'Days used' }}
           />
           <StatCard label="Loading" value="" loading />
         </div>
@@ -407,8 +407,8 @@ export function ComponentGallery() {
             <EmptyState
               icon={CalendarPlus}
               title="No credits allocated"
-              description="No credits have been allocated for 2026."
-              action={<Button>Allocate credits</Button>}
+              description="No days have been allocated for 2026."
+              action={<Button>Allocate days</Button>}
             />
           </Card>
           <Card>
@@ -469,7 +469,7 @@ export function ComponentGallery() {
           </Button>
           <Button
             variant="secondary"
-            onClick={() => toast.error('Not enough credits: 1 available, 2 requested.')}
+            onClick={() => toast.error('Not enough days: 1 available, 2 requested.')}
           >
             Error toast
           </Button>
@@ -480,7 +480,7 @@ export function ComponentGallery() {
             </DialogTrigger>
             <DialogContent size="md">
               <DialogHeader>
-                <DialogTitle>Allocate credits</DialogTitle>
+                <DialogTitle>Allocate days</DialogTitle>
                 <DialogDescription>
                   Credits are added to the employee&apos;s balance for the year.
                 </DialogDescription>
@@ -488,10 +488,10 @@ export function ComponentGallery() {
               <form onSubmit={(event) => event.preventDefault()}>
                 <DialogBody className="flex flex-col gap-4">
                   <TextField label="Employee ID" required />
-                  <DaysField label="Credits to add" required />
+                  <DaysField label="Days to add" required />
                 </DialogBody>
                 <DialogFooter>
-                  <FormFooter submitLabel="Allocate credits" onCancel={() => undefined} />
+                  <FormFooter submitLabel="Allocate days" onCancel={() => undefined} />
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -505,7 +505,7 @@ export function ComponentGallery() {
             onOpenChange={setConfirmOpen}
             tone="destructive"
             title="Archive Juan Dela Cruz?"
-            description="Their leave history is kept and appears in reports, but they won't be available when allocating credits or recording leave. You can restore them at any time."
+            description="Their leave history is kept and appears in reports, but they won't be available when allocating days or recording leave. You can restore them at any time."
             confirmLabel="Archive employee"
             onConfirm={() => new Promise<void>((resolve) => setTimeout(resolve, 600))}
           />

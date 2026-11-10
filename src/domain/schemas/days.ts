@@ -8,7 +8,7 @@ import { DAY_STEP, MAX_DAYS_PER_ENTRY, REMARKS_MAX_LENGTH } from '@/domain/const
  */
 
 /** A day amount typed as text → number. Checks run in this order; the first failure is shown. */
-export function daysField(requiredMessage: string, subject: 'Credits' | 'Days') {
+export function daysField(requiredMessage: string, subject: 'Days') {
   return z
     .string()
     .trim()

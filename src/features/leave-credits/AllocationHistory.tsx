@@ -20,14 +20,14 @@ interface AllocationHistoryProps {
   readonly onReverse: (entry: LeaveTransaction) => void;
 }
 
-/** Leave Credits → Allocation history (UI spec §6.7): the year's ALLOCATION entries, newest first. */
+/** Leave Days → Allocation history (UI spec §6.7): the year's allocations and edits, newest first. */
 export function AllocationHistory({ year, onAllocate, onReverse }: AllocationHistoryProps) {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const employees = useEmployees();
 
   const query = useLedgerList({
     year,
-    transactionType: 'ALLOCATION',
+    transactionType: ['ALLOCATION', 'ADJUSTMENT'],
     ...(employeeId ? { employeeId } : {}),
   });
   const rows = useMemo(() => flattenLedger(query.data), [query.data]);
@@ -42,7 +42,7 @@ export function AllocationHistory({ year, onAllocate, onReverse }: AllocationHis
     { id: 'employee', header: 'Employee', isRowHeader: true, cell: (e) => e.employeeNameSnapshot },
     {
       id: 'credits',
-      header: 'Credits added',
+      header: 'Change',
       align: 'right',
       cell: (e) => <span className="tabular-nums">{effectLabel(e)}</span>,
     },
@@ -115,11 +115,9 @@ export function AllocationHistory({ year, onAllocate, onReverse }: AllocationHis
               title={
                 hasFilters
                   ? 'No allocations match your filters.'
-                  : `No credit allocations recorded for ${String(year)}.`
+                  : `No allocations recorded for ${String(year)}.`
               }
-              action={
-                hasFilters ? undefined : <Button onClick={onAllocate}>Allocate credits</Button>
-              }
+              action={hasFilters ? undefined : <Button onClick={onAllocate}>Allocate days</Button>}
             />
           }
         />

@@ -91,7 +91,7 @@ const appRoutes: RouteObject[] = [
               import('@/features/leave-credits/LeaveCreditsPage').then((m) => ({
                 Component: m.LeaveCreditsPage,
               })),
-            handle: handle('Leave Credits'),
+            handle: handle('Leave Days'),
           },
           {
             path: 'leave-usage',

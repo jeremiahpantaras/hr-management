@@ -63,12 +63,25 @@ export function LedgerTable({
     cell: (e) => <span className="tabular-nums">{formatDays(e.days)}</span>,
   });
   if (variant === 'history') {
-    columns.push({
-      id: 'effect',
-      header: 'Effect on balance',
-      priority: 'low',
-      cell: (e) => <span className="tabular-nums">{effectLabel(e)}</span>,
-    });
+    columns.push(
+      {
+        id: 'effect',
+        header: 'Effect on balance',
+        priority: 'low',
+        cell: (e) => <span className="tabular-nums">{effectLabel(e)}</span>,
+      },
+      {
+        // What the employee had left for that year right after this entry was recorded.
+        id: 'remaining',
+        header: 'Remaining days',
+        align: 'right',
+        cell: (e) => (
+          <span className="tabular-nums">
+            {formatDays(e.resultingTotalCredits - e.resultingTotalUsed)}
+          </span>
+        ),
+      },
+    );
   }
   columns.push(
     { id: 'remarks', header: 'Remarks', priority: 'low', cell: (e) => e.remarks ?? '—' },

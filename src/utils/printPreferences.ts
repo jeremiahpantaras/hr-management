@@ -3,6 +3,7 @@ import type { Orientation, PaperSize } from '@/utils/excel/xlsxPatch';
 /** Each export remembers its own choice (employees and the leave credits report). */
 export const EMPLOYEE_EXPORT_KEY = 'hr.employeeExport.print';
 export const REPORT_EXPORT_KEY = 'hr.leaveReport.print';
+export const HISTORY_EXPORT_KEY = 'hr.leaveHistory.print';
 
 export interface PrintPreferences {
   readonly paper: PaperSize;

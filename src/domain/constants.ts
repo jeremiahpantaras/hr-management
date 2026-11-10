@@ -42,10 +42,14 @@ export const LOW_BALANCE_THRESHOLD = 2;
 export const LEAVE_YEAR_RULES_MIN = 2000;
 export const LEAVE_YEAR_RULES_MAX = 2100;
 
-export const TRANSACTION_TYPES = ['ALLOCATION', 'USAGE', 'REVERSAL'] as const;
+/**
+ * ALLOCATION adds days, USAGE deducts them, REVERSAL undoes one of those, and ADJUSTMENT (shown as an
+ * "Edit") changes the employee's total allocated days for a year — up or down, never below what is used.
+ */
+export const TRANSACTION_TYPES = ['ALLOCATION', 'USAGE', 'REVERSAL', 'ADJUSTMENT'] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 /** The two types that can be reversed. */
-export type ReversibleType = Exclude<TransactionType, 'REVERSAL'>;
+export type ReversibleType = 'ALLOCATION' | 'USAGE';
 
 /** Ledger lists page by cursor; the credits matrix pages employees (≤ 30 for Firestore `in`). */
 export const LEDGER_PAGE_SIZE = 25;

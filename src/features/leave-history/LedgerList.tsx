@@ -1,4 +1,4 @@
-import { History } from 'lucide-react';
+import { Download, History } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Pagination } from '@/components/data/Pagination';
@@ -11,6 +11,7 @@ import { useEmployees } from '@/features/employees/hooks/useEmployees';
 import { flattenLedger, useLedgerList } from '@/features/leave-history/hooks/useLedger';
 import { LedgerDetailSheet } from '@/features/leave-history/LedgerDetailSheet';
 import { EMPTY_FILTERS, type LedgerFilterState } from '@/features/leave-history/ledgerFilterState';
+import { LedgerExportDialog } from '@/features/leave-history/LedgerExportDialog';
 import { LedgerFilters } from '@/features/leave-history/LedgerFilters';
 import { LedgerTable } from '@/features/leave-history/LedgerTable';
 import { ReverseDialog } from '@/features/leave-history/ReverseDialog';
@@ -86,6 +87,7 @@ export function LedgerList({
   const [detailOpen, setDetailOpen] = useState(false);
   const [reverseTarget, setReverseTarget] = useState<LeaveTransaction | null>(null);
   const [reverseOpen, setReverseOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const error = query.isError
     ? {
@@ -97,6 +99,20 @@ export function LedgerList({
 
   return (
     <div className="flex flex-col gap-3">
+      {variant === 'history' ? (
+        <div className="flex justify-end">
+          <Button
+            variant="secondary"
+            disabled={query.isPending || query.isError}
+            onClick={() => {
+              setExportOpen(true);
+            }}
+          >
+            <Download aria-hidden="true" />
+            Export
+          </Button>
+        </div>
+      ) : null}
       <LedgerFilters
         value={filters}
         onChange={setFilters}
@@ -169,6 +185,21 @@ export function LedgerList({
         employee={employees.data?.find((e) => e.id === detail?.employeeId)}
         loaded={loaded}
         onOpenEntry={setDetail}
+      />
+      <LedgerExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        year={year}
+        filtered={anyFilter}
+        filters={{
+          ...(lockedEmployeeId
+            ? { employeeId: lockedEmployeeId }
+            : filters.employeeId
+              ? { employeeId: filters.employeeId }
+              : {}),
+          transactionType: serverType,
+          ...clientFilters,
+        }}
       />
       <ReverseDialog
         open={reverseOpen}

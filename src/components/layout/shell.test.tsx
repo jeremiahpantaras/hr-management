@@ -44,7 +44,7 @@ describe('navigation config', () => {
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       'Dashboard',
       'Employees',
-      'Leave Credits',
+      'Leave Days',
       'Leave Usage',
       'Leave History',
       'Reports',
@@ -73,7 +73,7 @@ describe('AppShell (UI spec §5)', () => {
     renderShell('/leave-credits');
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).getAllByRole('link')).toHaveLength(7);
-    expect(within(nav).getByRole('link', { name: 'Leave Credits' })).toHaveAttribute(
+    expect(within(nav).getByRole('link', { name: 'Leave Days' })).toHaveAttribute(
       'aria-current',
       'page',
     );

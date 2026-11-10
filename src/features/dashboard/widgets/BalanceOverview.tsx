@@ -40,7 +40,7 @@ export function BalanceOverview({ year }: { readonly year: number }) {
   return (
     <WidgetCard
       title="Employee leave balances"
-      viewAll={{ to: `/leave-credits?year=${String(year)}`, label: 'Open Leave Credits' }}
+      viewAll={{ to: `/leave-credits?year=${String(year)}`, label: 'Open Leave Days' }}
       loading={loading}
       error={employees.isError ? employees.error : balances.isError ? balances.error : null}
       onRetry={() => {

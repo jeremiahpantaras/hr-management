@@ -1,6 +1,7 @@
 import {
   LEAVE_YEAR_RULES_MAX,
   LEAVE_YEAR_RULES_MIN,
+  MAX_DAYS_PER_ENTRY,
   REMARKS_MAX_LENGTH,
   REVERSAL_REASON_MIN_LENGTH,
   type ReversibleType,
@@ -8,7 +9,7 @@ import {
 } from '@/domain/constants';
 import { applyEntryToBalance, calcAvailable, type BalanceEffect } from '@/domain/balance';
 import { inclusiveDays, isInYear, isRealDate } from '@/domain/dates';
-import { isValidDays } from '@/domain/days';
+import { isDayMultiple, isValidDays } from '@/domain/days';
 import { AppError } from '@/domain/errors';
 import type {
   Actor,
@@ -51,6 +52,9 @@ export function entryEffect(
       return { creditsDelta: days, usedDelta: 0 };
     case 'USAGE':
       return { creditsDelta: 0, usedDelta: days };
+    case 'ADJUSTMENT':
+      // An edit's delta is signed and is not derived from `days`; use `buildAdjustmentEntry`.
+      throw new AppError('VALIDATION');
     case 'REVERSAL':
       if (reversesType === 'ALLOCATION') return { creditsDelta: -days, usedDelta: 0 };
       if (reversesType === 'USAGE') return { creditsDelta: 0, usedDelta: -days };
@@ -191,6 +195,48 @@ export function buildUsageEntry(params: UsageParams): BuiltEntry {
   return { entry, balance };
 }
 
+export interface AdjustmentParams extends CommonContext {
+  readonly year: number;
+  /** The employee's new TOTAL allocated days for the year. */
+  readonly newTotal: number;
+  /** Why the total is being changed — mandatory, it is the audit trail. */
+  readonly reason: string;
+}
+
+/**
+ * Editing an employee's allocated days. Appends an ADJUSTMENT entry whose signed delta is
+ * `newTotal − current total`; the earlier entries stay untouched, and the entry records who changed
+ * it and when. It can only change an EXISTING balance and can never go below the days already used.
+ */
+export function buildAdjustmentEntry(params: AdjustmentParams): BuiltEntry {
+  assertUsable(params);
+  assertYear(params.year);
+  const reason = params.reason.trim();
+  if (reason.length < REVERSAL_REASON_MIN_LENGTH || reason.length > REMARKS_MAX_LENGTH) {
+    throw new AppError('VALIDATION');
+  }
+  if (params.balance === null) throw new AppError('NOT_FOUND');
+  const { newTotal } = params;
+  if (!Number.isFinite(newTotal) || newTotal < 0 || !isDayMultiple(newTotal)) {
+    throw new AppError('VALIDATION');
+  }
+  if (newTotal < params.balance.totalUsed) {
+    throw new AppError('BELOW_USED', {
+      details: { used: params.balance.totalUsed, requested: newTotal },
+    });
+  }
+  const delta = newTotal - params.balance.totalCredits;
+  if (delta === 0 || Math.abs(delta) > MAX_DAYS_PER_ENTRY) throw new AppError('VALIDATION');
+
+  const effect: BalanceEffect = { creditsDelta: delta, usedDelta: 0 };
+  const balance = applyEntryToBalance(params.balance, effect);
+  const entry = {
+    ...baseEntry(params, params.year, 'ADJUSTMENT', Math.abs(delta), effect, balance),
+    remarks: reason,
+  };
+  return { entry, balance };
+}
+
 export interface ReversalParams {
   readonly original: LeaveTransaction;
   readonly balance: BalanceTotals | null;
@@ -213,7 +259,10 @@ export function buildReversalEntry(params: ReversalParams): BuiltReversal {
   if (reason.length < REVERSAL_REASON_MIN_LENGTH || reason.length > REMARKS_MAX_LENGTH) {
     throw new AppError('VALIDATION');
   }
-  if (original.transactionType === 'REVERSAL') throw new AppError('CANNOT_REVERSE');
+  // Reversals and edits are never reversed (an edit is corrected by editing again).
+  if (original.transactionType === 'REVERSAL' || original.transactionType === 'ADJUSTMENT') {
+    throw new AppError('CANNOT_REVERSE');
+  }
   if (original.reversedByTransactionId !== null) throw new AppError('ALREADY_REVERSED');
   if (params.balance === null) throw new AppError('CANNOT_REVERSE');
 
