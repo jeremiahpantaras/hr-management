@@ -1,0 +1,52 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# Environment files — .env.development holds emulator-only demo values and IS committed.
+# Real project values belong in .env.development.local (never committed) locally, and in the
+# hosting provider's environment-variable settings (Vercel → Settings → Environment Variables).
+# NOTE: in Vite, .env.development OUTRANKS .env.local, so .env.local would not override it.
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Defence in depth: ignore EVERY other .env.* variant (e.g. .env.test, .env.staging, .env.*.local).
+# Only the example file and the demo-only .env.development are meant to be committed.
+.env.*
+!.env.example
+!.env.development
+
+# Secrets and credentials (the app never needs these; see planning/FIREBASE_SECURITY_PLAN.md §3)
+service-account*.json
+serviceAccount*.json
+*-adminsdk-*.json
+*credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+.runtimeconfig.json
+.npmrc
+.netrc
+
+# Hosting provider local state (Vercel CLI writes project/org ids here; Netlify likewise)
+.vercel
+.netlify
+
+# Firebase local state and emulator logs
+.firebase/
+firebase-debug.log*
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
+*.log
+
+# OS / editor
+.DS_Store
+
+# Claude Code local permissions (not application config)
+.claude/settings.local.json

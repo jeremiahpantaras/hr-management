@@ -1,0 +1,13 @@
+# Planning documents are the approved reference and must not be reformatted.
+planning/
+
+# Claude Code local settings
+.claude/
+
+# Generated / vendor
+node_modules/
+dist/
+coverage/
+package-lock.json
+.firebase/
+*.log

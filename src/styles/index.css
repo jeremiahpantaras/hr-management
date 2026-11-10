@@ -1,0 +1,145 @@
+/* Self-hosted Inter (variable) — planning/UI_UX_DESIGN_SPECIFICATION.md §3. */
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Design tokens — UI spec §2–§4 (Tailwind v4, CSS-first).
+ *
+ * RULE: raw colour values (hex) live ONLY in this @theme block. Components use the semantic
+ * utilities generated from these tokens (bg-primary, text-fg-muted, border-input …); a test
+ * (tests/unit/tokens.test.ts) enforces both the rule and the WCAG contrast of the key pairs.
+ *
+ * Pink is an accent, not a flood. White text is only ever placed on `primary` (pink-600,
+ * ≈5.0:1) — never on pink-500 (≈3.2:1), which is reserved for non-text accents and focus.
+ */
+@theme {
+  /* Google's brand mark colours (sign-in button logo only) — Google's, not ours, so they are not part
+     of the pink palette and are never used for UI chrome. */
+  --color-google-red: #ea4335;
+  --color-google-blue: #4285f4;
+  --color-google-yellow: #fbbc05;
+  --color-google-green: #34a853;
+  /* ── Typography ───────────────────────────────────────────────────────────────────────── */
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --text-page-title: 1.5rem; /* 24 / 32, 600 */
+  --text-page-title--line-height: 2rem;
+  --text-page-title--letter-spacing: -0.01em;
+  --text-page-title--font-weight: 600;
+  --text-section: 1.125rem; /* 18 / 28, 600 */
+  --text-section--line-height: 1.75rem;
+  --text-section--font-weight: 600;
+  --text-card-title: 1rem; /* 16 / 24, 600 */
+  --text-card-title--line-height: 1.5rem;
+  --text-card-title--font-weight: 600;
+  --text-stat: 1.75rem; /* 28 / 32, 600 */
+  --text-stat--line-height: 2rem;
+  --text-stat--font-weight: 600;
+  --text-caption: 0.75rem; /* 12 / 16 */
+  --text-caption--line-height: 1rem;
+
+  /* ── Brand pink scale (UI spec §2.1) ──────────────────────────────────────────────────── */
+  --color-pink-50: #fdf2f8;
+  --color-pink-100: #fce7f3;
+  --color-pink-200: #fbcfe8;
+  --color-pink-300: #f9a8d4;
+  --color-pink-400: #f472b6;
+  --color-pink-500: #e85d9e;
+  --color-pink-600: #c7357a;
+  --color-pink-700: #a82a66;
+  --color-pink-800: #8a2155;
+  --color-pink-900: #701c47;
+
+  /* ── Semantic colours (UI spec §2.2) ──────────────────────────────────────────────────── */
+  /* Surfaces */
+  --color-canvas: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #fafafa;
+  --color-hover: #f4f4f5;
+  /* Text */
+  --color-fg: #18181b;
+  --color-fg-muted: #52525b; /* secondary text; ≥4.5:1 on white AND on pink-50 */
+  --color-fg-subtle: #71717a; /* placeholders — white surfaces only (4.4:1 on pink-50) */
+  /* Borders (R-01: the control boundary is darker than decorative borders) */
+  --color-line: #f3e8ef; /* cards, sections — decorative */
+  --color-line-strong: #e4e4e7; /* table dividers */
+  --color-input: #8b8b94; /* form-control boundary, ≥3:1 (WCAG 1.4.11) */
+  /* Interactive */
+  --color-primary: var(--color-pink-600);
+  --color-primary-hover: var(--color-pink-700);
+  --color-primary-active: var(--color-pink-800);
+  --color-primary-fg: #ffffff;
+  --color-accent: var(--color-pink-500); /* indicators, progress, icons — never text */
+  --color-accent-soft: var(--color-pink-50);
+  --color-ring: var(--color-pink-500);
+  /* Status */
+  --color-success: #15803d;
+  --color-success-soft: #f0fdf4;
+  --color-warning: #92400e;
+  --color-warning-soft: #fffbeb;
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fef2f2;
+  --color-danger-solid: #dc2626; /* destructive button background (white text ≥4.5:1) */
+  --color-danger-solid-hover: #b91c1c;
+  --color-neutral: #3f3f46;
+  --color-neutral-soft: #f4f4f5;
+
+  /* ── Radius (UI spec §4) ──────────────────────────────────────────────────────────────── */
+  --radius-control: 0.5rem; /* inputs, buttons */
+  --radius-card: 0.75rem;
+  --radius-dialog: 1rem;
+
+  /* ── Elevation (never pink) ───────────────────────────────────────────────────────────── */
+  --shadow-card: 0 1px 2px rgb(24 24 27 / 0.04);
+  --shadow-popover: 0 4px 12px rgb(24 24 27 / 0.08), 0 1px 3px rgb(24 24 27 / 0.06);
+  --shadow-dialog: 0 12px 32px rgb(24 24 27 / 0.14);
+
+  /* ── Motion ───────────────────────────────────────────────────────────────────────────── */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Layout constants (UI spec §5). Spacing uses Tailwind's 4px grid (--spacing). */
+:root {
+  --sidebar-width: 16rem; /* 256px */
+  --header-height: 4rem; /* 64px (3.5rem on small screens) */
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-sm text-fg antialiased;
+  }
+
+  /* Default border colour is the decorative one; controls opt in to `border-input`. */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
+  }
+
+  /* One visible focus treatment for every interactive element (WCAG 2.4.7 / 1.4.11). */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  ::placeholder {
+    color: var(--color-fg-subtle);
+  }
+
+  /* Functional motion only; honour the user's preference (UI spec §15–§16). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

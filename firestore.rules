@@ -1,0 +1,309 @@
+rules_version = '2';
+
+// Collections: `users` (own-profile read, own display-name update), `employees` +
+// `employeeNumbers`, `leaveTypes`, and the ledger pair `leaveBalances` + `leaveTransactions`
+// (HR admin only; neither ledger document can be written without the other, in one commit).
+// Every other path stays denied by the final catch-all (planning/FIREBASE_SECURITY_PLAN.md §6).
+// Never deployed by the implementation phases — emulator only.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────── primitives ─────────
+    function isStr(v, lo, hi) { return v is string && v.size() >= lo && v.size() <= hi; }
+    function isTrimmed(v)     { return v == v.trim(); }
+    function exactKeys(d, keys) { return d.keys().hasOnly(keys) && d.keys().hasAll(keys); }
+
+    // Employment statuses — keep in sync with EMPLOYMENT_STATUSES in src/domain/constants.ts (Q-01).
+    function statuses() {
+      return ['Regular', 'Probationary', 'Contractual', 'Project-Based', 'Part-Time'];
+    }
+
+    // Amounts: > 0, ≤ 365 (MAX_DAYS_PER_ENTRY), a multiple of 0.5 (DAY_STEP). Years: 2000–2100.
+    function validDays(v) { return v is number && v > 0 && v <= 365 && int(v * 2) == v * 2; }
+    function validYear(v) { return v is int && v >= 2000 && v <= 2100; }
+    function isoDate(v) {
+      return v is string
+        && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+    }
+
+    function empPath(id)  { return /databases/$(database)/documents/employees/$(id); }
+    function numPath(key) { return /databases/$(database)/documents/employeeNumbers/$(key); }
+    function typePath(id) { return /databases/$(database)/documents/leaveTypes/$(id); }
+    function balPath(id)  { return /databases/$(database)/documents/leaveBalances/$(id); }
+    function txnPath(id)  { return /databases/$(database)/documents/leaveTransactions/$(id); }
+
+    // ───────── identity (Security §4.1) ─────────
+    // Authorization = an active `hr_admin` profile document, evaluated on EVERY request, so
+    // deactivation takes effect immediately. A missing profile, or a profile missing `role` /
+    // `isActive`, makes the lookup error, and a rules error denies the request.
+    function signedIn() { return request.auth != null; }
+    function profile()  { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isHrAdmin() {
+      return signedIn() && profile().role == 'hr_admin' && profile().isActive == true;
+    }
+    function me() { return request.auth.uid; }
+
+    // ───────── users ─────────
+    match /users/{uid} {
+      // A signed-in user may read ONLY their own profile — even when inactive or misconfigured —
+      // so the app can show "Access not available" instead of failing opaquely.
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+
+      // Profiles are created and deleted in the Firebase console only (provisioning).
+      allow create, delete: if false;
+
+      // The only client write: an active HR admin editing their OWN display name. `role`,
+      // `isActive`, `email` and `uid` can never change through the app, so nobody can
+      // promote themselves.
+      allow update: if isHrAdmin() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'updatedAt'])
+        && isStr(request.resource.data.fullName, 1, 100)
+        && isTrimmed(request.resource.data.fullName)
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // ───────── employees (Security §6.1 / §6.2; refinement R-04: Employee ID is editable) ─────────
+    function empKeys() {
+      return ['employeeNumber', 'employeeNumberKey', 'fullName', 'position', 'department',
+              'employmentStatus', 'isArchived', 'archivedAt', 'archivedBy',
+              'createdAt', 'createdBy', 'updatedAt', 'updatedBy'];
+    }
+    function employeeShapeOk(d) {
+      return exactKeys(d, empKeys())
+        && d.employeeNumber is string
+        && d.employeeNumber.matches('^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$')       // R-07
+        && d.employeeNumberKey == d.employeeNumber.upper()
+        && isStr(d.fullName, 1, 120) && isTrimmed(d.fullName)
+        && isStr(d.position, 1, 80)  && isTrimmed(d.position)
+        && (d.department == null || (isStr(d.department, 1, 80) && isTrimmed(d.department)))
+        && d.employmentStatus in statuses()
+        && d.isArchived is bool
+        && d.updatedAt == request.time && d.updatedBy == me();
+    }
+    // Archive / restore are the only transitions of the archive fields; otherwise they are unchanged.
+    function archiveStateOk(before, after) {
+      return (after.isArchived == before.isArchived
+              && after.archivedAt == before.archivedAt && after.archivedBy == before.archivedBy)
+          || (before.isArchived == false && after.isArchived == true
+              && after.archivedAt == request.time && after.archivedBy == me())
+          || (before.isArchived == true && after.isArchived == false
+              && after.archivedAt == null && after.archivedBy == null);
+    }
+    match /employees/{employeeId} {
+      allow get, list: if isHrAdmin();
+
+      // Create: the employee and its Employee-ID reservation are written in ONE commit, and each
+      // rule checks the other with getAfter(), so a duplicate ID (any case) cannot be created.
+      allow create: if isHrAdmin()
+        && employeeShapeOk(request.resource.data)
+        && request.resource.data.isArchived == false
+        && request.resource.data.archivedAt == null && request.resource.data.archivedBy == null
+        && request.resource.data.createdAt == request.time && request.resource.data.createdBy == me()
+        && !exists(numPath(request.resource.data.employeeNumberKey))
+        && getAfter(numPath(request.resource.data.employeeNumberKey)).data.employeeId == employeeId;
+
+      // Update: any field edit, archive/restore, or an Employee-ID change (reservation swap).
+      allow update: if isHrAdmin()
+        && employeeShapeOk(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && archiveStateOk(resource.data, request.resource.data)
+        && (request.resource.data.employeeNumberKey == resource.data.employeeNumberKey
+            || (!exists(numPath(request.resource.data.employeeNumberKey))
+                && getAfter(numPath(request.resource.data.employeeNumberKey)).data.employeeId == employeeId
+                && !existsAfter(numPath(resource.data.employeeNumberKey))));
+
+      // Employees are archived, never deleted (Confirmed).
+      allow delete: if false;
+    }
+
+    // One document per Employee ID key (the upper-cased ID) — enforces uniqueness.
+    match /employeeNumbers/{key} {
+      allow get: if isHrAdmin();
+      allow list: if false;
+      allow create: if isHrAdmin()
+        && exactKeys(request.resource.data, ['employeeId', 'createdAt'])
+        && request.resource.data.createdAt == request.time
+        && existsAfter(empPath(request.resource.data.employeeId))
+        && getAfter(empPath(request.resource.data.employeeId)).data.employeeNumberKey == key;
+      allow update: if false;
+      // Only releasable when the employee that held it moves to a different key in the same commit.
+      allow delete: if isHrAdmin()
+        && existsAfter(empPath(resource.data.employeeId))
+        && getAfter(empPath(resource.data.employeeId)).data.employeeNumberKey != key;
+    }
+
+    // ───────── leaveTypes (Security §6.3) ─────────
+    // Shape validation only. Name uniqueness is client-checked (A-05). Types are deactivated
+    // (`isActive: false`), never deleted.
+    function typeKeys() {
+      return ['name', 'description', 'isActive', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'];
+    }
+    function typeShapeOk(d) {
+      return exactKeys(d, typeKeys())
+        && isStr(d.name, 1, 60) && isTrimmed(d.name)
+        && (d.description == null || (isStr(d.description, 1, 200) && isTrimmed(d.description)))
+        && d.isActive is bool
+        && d.updatedAt == request.time && d.updatedBy == me();
+    }
+    match /leaveTypes/{leaveTypeId} {
+      allow get, list: if isHrAdmin();
+      allow create: if isHrAdmin() && typeShapeOk(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == me();
+      allow update: if isHrAdmin() && typeShapeOk(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if false;
+    }
+
+    // ───────── ledger helpers (shared by leaveBalances and leaveTransactions) ─────────
+    function ledgerAfter(id)  { return getAfter(txnPath(id)).data; }
+    function balanceAfter(id) { return getAfter(balPath(id)).data; }
+
+    // ───────── leaveBalances (Security §6.4) ─────────
+    // A balance can only be written in the same commit as a NEW ledger entry that points at it,
+    // and only to totals that equal the stored totals plus that entry's deltas.
+    function balKeys() {
+      return ['employeeId', 'leaveTypeId', 'year', 'totalCredits', 'totalUsed', 'availableCredits',
+              'lastTransactionId', 'createdAt', 'updatedAt'];
+    }
+    function balanceLinkedToNewLedger(balanceId, d) {
+      return exactKeys(d, balKeys())
+        && validYear(d.year)
+        && d.employeeId is string && d.leaveTypeId is string
+        && balanceId == d.employeeId + '_' + string(d.year) + '_' + d.leaveTypeId
+        && d.lastTransactionId is string
+        && d.lastTransactionId.matches('^(rev_)?[A-Za-z0-9]{20}$')
+        && !exists(txnPath(d.lastTransactionId))          // the ledger entry is NEW in this commit
+        && existsAfter(txnPath(d.lastTransactionId))      // …and is being written in this commit
+        && ledgerAfter(d.lastTransactionId).balanceId == balanceId
+        && ledgerAfter(d.lastTransactionId).employeeId == d.employeeId
+        && ledgerAfter(d.lastTransactionId).leaveTypeId == d.leaveTypeId
+        && ledgerAfter(d.lastTransactionId).leaveYear == d.year
+        && d.availableCredits == d.totalCredits - d.totalUsed
+        && d.totalCredits >= 0 && d.totalUsed >= 0 && d.availableCredits >= 0
+        && d.updatedAt == request.time;
+    }
+    match /leaveBalances/{balanceId} {
+      allow get, list: if isHrAdmin();
+      allow create: if isHrAdmin()
+        && balanceLinkedToNewLedger(balanceId, request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.totalCredits == ledgerAfter(request.resource.data.lastTransactionId).creditsDelta
+        && request.resource.data.totalUsed    == ledgerAfter(request.resource.data.lastTransactionId).usedDelta;
+      allow update: if isHrAdmin()
+        && balanceLinkedToNewLedger(balanceId, request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.employeeId == resource.data.employeeId
+        && request.resource.data.leaveTypeId == resource.data.leaveTypeId
+        && request.resource.data.year == resource.data.year
+        && request.resource.data.totalCredits ==
+             resource.data.totalCredits + ledgerAfter(request.resource.data.lastTransactionId).creditsDelta
+        && request.resource.data.totalUsed ==
+             resource.data.totalUsed + ledgerAfter(request.resource.data.lastTransactionId).usedDelta;
+      allow delete: if false;
+    }
+
+    // ───────── leaveTransactions (Security §6.5) ─────────
+    function ledgerKeys() {
+      return ['employeeId', 'employeeNumberSnapshot', 'employeeNameSnapshot', 'positionSnapshot',
+              'departmentSnapshot', 'leaveTypeId', 'leaveTypeNameSnapshot', 'leaveYear', 'balanceId',
+              'transactionType', 'days', 'creditsDelta', 'usedDelta', 'dateFrom', 'dateTo', 'remarks',
+              'reversesTransactionId', 'reversesType', 'reversedByTransactionId',
+              'resultingTotalCredits', 'resultingTotalUsed', 'createdBy', 'createdByName', 'createdAt'];
+    }
+    // ALLOCATION / USAGE: snapshots must match current master data; employee active; type active.
+    function masterDataOk(d) {
+      return get(empPath(d.employeeId)).data.isArchived == false
+        && get(typePath(d.leaveTypeId)).data.isActive == true
+        && d.employeeNumberSnapshot == get(empPath(d.employeeId)).data.employeeNumber
+        && d.employeeNameSnapshot   == get(empPath(d.employeeId)).data.fullName
+        && d.positionSnapshot       == get(empPath(d.employeeId)).data.position
+        && d.departmentSnapshot     == get(empPath(d.employeeId)).data.department
+        && d.leaveTypeNameSnapshot  == get(typePath(d.leaveTypeId)).data.name;
+    }
+    function allocationOk(d) {
+      return d.creditsDelta == d.days && d.usedDelta == 0
+        && d.dateFrom == null && d.dateTo == null
+        && d.reversesTransactionId == null && d.reversesType == null
+        && masterDataOk(d);
+    }
+    function usageOk(d) {
+      return d.usedDelta == d.days && d.creditsDelta == 0
+        && isoDate(d.dateFrom) && isoDate(d.dateTo) && d.dateFrom <= d.dateTo
+        && d.dateFrom.matches('^' + string(d.leaveYear) + '-.*')
+        && d.dateTo.matches('^' + string(d.leaveYear) + '-.*')
+        && d.reversesTransactionId == null && d.reversesType == null
+        && masterDataOk(d);
+    }
+    // REVERSAL: an exact mirror of the original, linked both ways in the same commit (R-02, R-03).
+    function reversalOk(txnId, d) {
+      return d.reversesTransactionId is string
+        && txnId == 'rev_' + d.reversesTransactionId
+        && d.remarks is string && d.remarks.size() >= 3
+        && exists(txnPath(d.reversesTransactionId))
+        && get(txnPath(d.reversesTransactionId)).data.transactionType in ['ALLOCATION', 'USAGE']
+        && get(txnPath(d.reversesTransactionId)).data.reversedByTransactionId == null
+        && ledgerAfter(d.reversesTransactionId).reversedByTransactionId == txnId
+        && d.reversesType == get(txnPath(d.reversesTransactionId)).data.transactionType
+        && d.balanceId   == get(txnPath(d.reversesTransactionId)).data.balanceId
+        && d.employeeId  == get(txnPath(d.reversesTransactionId)).data.employeeId
+        && d.leaveTypeId == get(txnPath(d.reversesTransactionId)).data.leaveTypeId
+        && d.leaveYear   == get(txnPath(d.reversesTransactionId)).data.leaveYear
+        && d.days        == get(txnPath(d.reversesTransactionId)).data.days
+        && d.creditsDelta == -get(txnPath(d.reversesTransactionId)).data.creditsDelta
+        && d.usedDelta    == -get(txnPath(d.reversesTransactionId)).data.usedDelta
+        && d.dateFrom == get(txnPath(d.reversesTransactionId)).data.dateFrom
+        && d.dateTo   == get(txnPath(d.reversesTransactionId)).data.dateTo
+        && d.employeeNumberSnapshot == get(txnPath(d.reversesTransactionId)).data.employeeNumberSnapshot
+        && d.employeeNameSnapshot   == get(txnPath(d.reversesTransactionId)).data.employeeNameSnapshot
+        && d.positionSnapshot       == get(txnPath(d.reversesTransactionId)).data.positionSnapshot
+        && d.departmentSnapshot     == get(txnPath(d.reversesTransactionId)).data.departmentSnapshot
+        && d.leaveTypeNameSnapshot  == get(txnPath(d.reversesTransactionId)).data.leaveTypeNameSnapshot;
+    }
+    function ledgerCreateOk(txnId, d) {
+      return exactKeys(d, ledgerKeys())
+        && txnId.matches('^(rev_)?[A-Za-z0-9]{20}$')
+        && (d.transactionType == 'REVERSAL' ? txnId.matches('^rev_.*') : !txnId.matches('^rev_.*'))
+        && d.createdBy == me() && d.createdAt == request.time && d.createdByName == profile().fullName
+        && validYear(d.leaveYear) && validDays(d.days)
+        && (d.remarks == null || isStr(d.remarks, 1, 500))
+        && d.employeeId is string && d.leaveTypeId is string
+        && d.balanceId == d.employeeId + '_' + string(d.leaveYear) + '_' + d.leaveTypeId
+        && d.reversedByTransactionId == null
+        // ── atomic pairing with the balance ──
+        && existsAfter(balPath(d.balanceId))
+        && balanceAfter(d.balanceId).lastTransactionId == txnId
+        && balanceAfter(d.balanceId).totalCredits == d.resultingTotalCredits
+        && balanceAfter(d.balanceId).totalUsed    == d.resultingTotalUsed
+        // ── per-type semantics ──
+        && ((d.transactionType == 'ALLOCATION' && allocationOk(d))
+            || (d.transactionType == 'USAGE'    && usageOk(d))
+            || (d.transactionType == 'REVERSAL' && reversalOk(txnId, d)));
+    }
+    // The single permitted update: link an original to its reversal, exactly once.
+    function ledgerLinkOk(txnId, before, after) {
+      return after.diff(before).affectedKeys().hasOnly(['reversedByTransactionId'])
+        && before.reversedByTransactionId == null
+        && before.transactionType in ['ALLOCATION', 'USAGE']
+        && after.reversedByTransactionId == 'rev_' + txnId
+        && !exists(txnPath('rev_' + txnId))
+        && existsAfter(txnPath('rev_' + txnId))
+        && ledgerAfter('rev_' + txnId).transactionType == 'REVERSAL'
+        && ledgerAfter('rev_' + txnId).reversesTransactionId == txnId;
+    }
+    match /leaveTransactions/{txnId} {
+      allow get, list: if isHrAdmin();
+      allow create: if isHrAdmin() && ledgerCreateOk(txnId, request.resource.data);
+      allow update: if isHrAdmin() && ledgerLinkOk(txnId, resource.data, request.resource.data);
+      allow delete: if false;
+    }
+
+    // ───────── everything else: denied until its phase adds a tested block ─────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
